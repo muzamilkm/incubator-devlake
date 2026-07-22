@@ -26,10 +26,10 @@ type ClaudeEnterpriseAnalyticsRecord struct {
 	common.NoPKModel
 
 	ConnectionId   uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId        string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	ScopeId        string `gorm:"primaryKey;type:varchar(128)" json:"scopeId"`
+	OrganizationId string `gorm:"primaryKey;type:varchar(128)" json:"organizationId"`
 	Endpoint       string `gorm:"primaryKey;type:varchar(100)" json:"endpoint"`
-	RecordId       string `gorm:"primaryKey;type:varchar(512)" json:"recordId"`
+	RecordId       string `gorm:"primaryKey;type:varchar(64)" json:"recordId"`
 
 	Date      string `json:"date" gorm:"type:varchar(32)"`
 	Grain     string `json:"grain" gorm:"type:varchar(32)"`

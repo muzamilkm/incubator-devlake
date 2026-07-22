@@ -515,7 +515,8 @@ func TestPhase11BuildCostReportKeepsDecimalAmountsAsStrings(t *testing.T) {
 	require.Equal(t, "USD", cost.Currency)
 	require.Equal(t, "123.4567", cost.Amount)
 	require.Equal(t, "150.0000", cost.ListAmount)
-	require.Equal(t, int64(9), cost.RequestCount)
+	require.NotNil(t, cost.RequestCount)
+	require.Equal(t, int64(9), *cost.RequestCount)
 	require.JSONEq(t, string(rows[0]), cost.RawJson)
 }
 

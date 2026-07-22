@@ -36,8 +36,8 @@ type ClaudeEnterprisePluginAdoption struct {
 	common.NoPKModel
 
 	ConnectionId                             uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId                                  string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId                           string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	ScopeId                                  string `gorm:"primaryKey;type:varchar(128)" json:"scopeId"`
+	OrganizationId                           string `gorm:"primaryKey;type:varchar(128)" json:"organizationId"`
 	Date                                     string `gorm:"primaryKey;type:varchar(32)" json:"date"`
 	PluginId                                 string `gorm:"type:varchar(255)" json:"pluginId"`
 	PluginName                               string `gorm:"primaryKey;type:varchar(255)" json:"pluginName"`

@@ -440,13 +440,14 @@ func BuildAnalyticsRecord(raw []byte, params analyticsRawParams) (*models.Claude
 		return nil, errors.Default.Wrap(err, "failed to parse Claude Enterprise analytics item")
 	}
 
+	date := firstNonEmpty(params.RequestDate, firstString(item, "date", "starting_date", "starting_at", "start_date", "day"))
 	record := &models.ClaudeEnterpriseAnalyticsRecord{
 		ConnectionId:   params.ConnectionId,
 		ScopeId:        params.ScopeId,
 		OrganizationId: params.OrganizationId,
 		Endpoint:       params.Endpoint,
-		Date:           firstNonEmpty(params.RequestDate, firstString(item, "date", "starting_date", "starting_at", "start_date", "day")),
-		Grain:          firstString(item, "grain", "period", "granularity"),
+		Date:           datePart(date),
+		Grain:          firstNonEmpty(firstString(item, "grain", "period", "granularity"), "day"),
 		UserId:         firstString(item, "user.id", "actor.user_id"),
 		UserEmail:      firstString(item, "user.email_address", "actor.email"),
 		Product:        firstString(item, "product"),
@@ -574,7 +575,7 @@ func BuildCostReport(raw []byte, params analyticsRawParams) (*models.ClaudeEnter
 		DataRefreshedAt: firstString(item, "data_refreshed_at"),
 		Amount:          firstDecimalString(item, "amount"),
 		ListAmount:      firstDecimalString(item, "list_amount"),
-		RequestCount:    firstInt64(item, "requests"),
+		RequestCount:    firstInt64Ptr(item, "requests"),
 		RawJson:         string(raw),
 	}
 	report.ReportId = costReportId(report)
@@ -582,10 +583,11 @@ func BuildCostReport(raw []byte, params analyticsRawParams) (*models.ClaudeEnter
 }
 
 type analyticsResponseEnvelope struct {
-	Data      []json.RawMessage `json:"data"`
-	Items     []json.RawMessage `json:"items"`
-	Results   []json.RawMessage `json:"results"`
-	Summaries []json.RawMessage `json:"summaries"`
+	Data            []json.RawMessage `json:"data"`
+	Items           []json.RawMessage `json:"items"`
+	Results         []json.RawMessage `json:"results"`
+	Summaries       []json.RawMessage `json:"summaries"`
+	DataRefreshedAt string            `json:"data_refreshed_at"`
 }
 
 type analyticsPaginationEnvelope struct {
@@ -613,7 +615,9 @@ func parseAnalyticsResponse(res *http.Response) ([]json.RawMessage, errors.Error
 	}
 	switch {
 	case envelope.Data != nil:
-		return envelope.Data, nil
+		return withEnvelopeFields(envelope.Data, map[string]string{
+			"data_refreshed_at": envelope.DataRefreshedAt,
+		}), nil
 	case envelope.Items != nil:
 		return envelope.Items, nil
 	case envelope.Results != nil:
@@ -623,6 +627,39 @@ func parseAnalyticsResponse(res *http.Response) ([]json.RawMessage, errors.Error
 	default:
 		return []json.RawMessage{body}, nil
 	}
+}
+
+func withEnvelopeFields(rows []json.RawMessage, fields map[string]string) []json.RawMessage {
+	hasFields := false
+	for _, value := range fields {
+		if value != "" {
+			hasFields = true
+			break
+		}
+	}
+	if !hasFields {
+		return rows
+	}
+	enriched := make([]json.RawMessage, 0, len(rows))
+	for _, row := range rows {
+		var item map[string]interface{}
+		if err := json.Unmarshal(row, &item); err != nil {
+			enriched = append(enriched, row)
+			continue
+		}
+		for key, value := range fields {
+			if value != "" {
+				item[key] = value
+			}
+		}
+		raw, err := json.Marshal(item)
+		if err != nil {
+			enriched = append(enriched, row)
+			continue
+		}
+		enriched = append(enriched, raw)
+	}
+	return enriched
 }
 
 func getAnalyticsNextPageFunc(endpoint analyticsEndpoint) func(*helper.RequestData, *http.Response) (interface{}, errors.Error) {
@@ -714,6 +751,34 @@ func firstInt64(item map[string]interface{}, paths ...string) int64 {
 		}
 	}
 	return 0
+}
+
+func firstInt64Ptr(item map[string]interface{}, paths ...string) *int64 {
+	for _, path := range paths {
+		if value, ok := lookupPath(item, strings.Split(path, ".")); ok {
+			switch typed := value.(type) {
+			case float64:
+				parsed := int64(typed)
+				return &parsed
+			case int:
+				parsed := int64(typed)
+				return &parsed
+			case int64:
+				return &typed
+			case json.Number:
+				parsed, err := typed.Int64()
+				if err == nil {
+					return &parsed
+				}
+			case string:
+				parsed, err := strconv.ParseInt(typed, 10, 64)
+				if err == nil {
+					return &parsed
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func firstFloat64(item map[string]interface{}, paths ...string) float64 {

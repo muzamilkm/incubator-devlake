@@ -51,8 +51,8 @@ func (script *addClaudeEnterpriseExtendedEntities) Name() string {
 type claudeSkill20260715 struct {
 	archived.NoPKModel
 	ConnectionId                            uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId                                 string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId                          string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	ScopeId                                 string `gorm:"primaryKey;type:varchar(128)" json:"scopeId"`
+	OrganizationId                          string `gorm:"primaryKey;type:varchar(128)" json:"organizationId"`
 	Date                                    string `gorm:"primaryKey;type:varchar(32)" json:"date"`
 	SkillName                               string `gorm:"primaryKey;type:varchar(255)" json:"skillName"`
 	SkillDisplayName                        string `gorm:"type:varchar(255)" json:"skillDisplayName"`
@@ -76,8 +76,8 @@ func (claudeSkill20260715) TableName() string {
 type claudeConnector20260715 struct {
 	archived.NoPKModel
 	ConnectionId                                uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId                                     string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId                              string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	ScopeId                                     string `gorm:"primaryKey;type:varchar(128)" json:"scopeId"`
+	OrganizationId                              string `gorm:"primaryKey;type:varchar(128)" json:"organizationId"`
 	Date                                        string `gorm:"primaryKey;type:varchar(32)" json:"date"`
 	ConnectorName                               string `gorm:"primaryKey;type:varchar(255)" json:"connectorName"`
 	DistinctUserCount                           int64  `json:"distinctUserCount"`
@@ -97,8 +97,8 @@ func (claudeConnector20260715) TableName() string {
 type claudeChatProject20260715 struct {
 	archived.NoPKModel
 	ConnectionId              uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId                   string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId            string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	ScopeId                   string `gorm:"primaryKey;type:varchar(128)" json:"scopeId"`
+	OrganizationId            string `gorm:"primaryKey;type:varchar(128)" json:"organizationId"`
 	Date                      string `gorm:"primaryKey;type:varchar(32)" json:"date"`
 	ProjectId                 string `gorm:"primaryKey;type:varchar(255)" json:"projectId"`
 	ProjectName               string `gorm:"type:varchar(255)" json:"projectName"`
@@ -118,8 +118,8 @@ func (claudeChatProject20260715) TableName() string {
 type claudePluginAdoption20260715 struct {
 	archived.NoPKModel
 	ConnectionId                             uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId                                  string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId                           string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	ScopeId                                  string `gorm:"primaryKey;type:varchar(128)" json:"scopeId"`
+	OrganizationId                           string `gorm:"primaryKey;type:varchar(128)" json:"organizationId"`
 	Date                                     string `gorm:"primaryKey;type:varchar(32)" json:"date"`
 	PluginId                                 string `gorm:"type:varchar(255)" json:"pluginId"`
 	PluginName                               string `gorm:"primaryKey;type:varchar(255)" json:"pluginName"`
@@ -138,8 +138,8 @@ func (claudePluginAdoption20260715) TableName() string {
 type claudeArtifact20260715 struct {
 	archived.NoPKModel
 	ConnectionId                   uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId                        string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId                 string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	ScopeId                        string `gorm:"primaryKey;type:varchar(128)" json:"scopeId"`
+	OrganizationId                 string `gorm:"primaryKey;type:varchar(128)" json:"organizationId"`
 	Date                           string `gorm:"primaryKey;type:varchar(32)" json:"date"`
 	ArtifactType                   string `gorm:"primaryKey;type:varchar(100)" json:"artifactType"`
 	IsShared                       bool   `gorm:"primaryKey" json:"isShared"`

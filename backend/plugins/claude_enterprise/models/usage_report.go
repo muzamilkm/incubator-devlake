@@ -28,15 +28,15 @@ type ClaudeEnterpriseUsageReport struct {
 
 	ReportId        string `gorm:"primaryKey;type:varchar(64)" json:"reportId"`
 	ConnectionId    uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId         string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId  string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
-	StartingAt      string `gorm:"primaryKey;type:varchar(64)" json:"startingAt"`
-	EndingAt        string `gorm:"primaryKey;type:varchar(64)" json:"endingAt"`
-	UserId          string `gorm:"primaryKey;type:varchar(255)" json:"userId"`
+	ScopeId         string `gorm:"primaryKey;type:varchar(128)" json:"scopeId"`
+	OrganizationId  string `gorm:"primaryKey;type:varchar(128)" json:"organizationId"`
+	StartingAt      string `gorm:"type:varchar(64)" json:"startingAt"`
+	EndingAt        string `gorm:"type:varchar(64)" json:"endingAt"`
+	UserId          string `gorm:"type:varchar(255)" json:"userId"`
 	UserEmail       string `gorm:"type:varchar(255)" json:"userEmail"`
 	DeletedActor    bool   `json:"deletedActor"`
 	Product         string `gorm:"type:varchar(100)" json:"product"`
-	Model           string `gorm:"primaryKey;type:varchar(255)" json:"model"`
+	Model           string `gorm:"type:varchar(255)" json:"model"`
 	ContextWindow   string `gorm:"type:varchar(32)" json:"contextWindow"`
 	InferenceGeo    string `gorm:"type:varchar(32)" json:"inferenceGeo"`
 	Speed           string `gorm:"type:varchar(32)" json:"speed"`

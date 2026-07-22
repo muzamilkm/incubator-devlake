@@ -97,7 +97,7 @@ func buildUserActivity(idGen *didgen.DomainIdGenerator, accountId string, record
 	activityType, interfaceType := userActivitySemantics(product)
 	activity := &ai.AiActivity{
 		DomainEntity: domainlayer.DomainEntity{
-			Id: idGen.Generate(record.ConnectionId, record.ScopeId, record.OrganizationId, record.Endpoint, record.RecordId, product),
+			Id: idGen.Generate(record.ConnectionId, record.ScopeId, record.OrganizationId, record.Endpoint, record.RecordId+":"+product),
 		},
 		Provider:      "claude_enterprise",
 		AccountId:     accountId,
