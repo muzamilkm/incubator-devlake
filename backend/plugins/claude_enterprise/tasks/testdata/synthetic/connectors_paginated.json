@@ -3,12 +3,20 @@
     {
       "date": "2026-01-06",
       "grain": "daily",
-      "connector_id": "connector_synthetic_003",
       "connector_name": "Slack",
-      "connector_type": "mcp",
-      "status": "inactive",
-      "active_users": 1,
-      "usage_count": 2
+      "distinct_user_count": 1,
+      "read_call_count": 2,
+      "write_call_count": 0,
+      "unclassified_call_count": 0,
+      "chat_metrics": {
+        "distinct_conversation_connector_used_count": 2
+      },
+      "claude_code_metrics": {
+        "distinct_session_connector_used_count": 0
+      },
+      "cowork_metrics": {
+        "distinct_session_connector_used_count": 0
+      }
     }
   ],
   "next_page": null

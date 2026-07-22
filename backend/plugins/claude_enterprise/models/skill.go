@@ -50,12 +50,6 @@ type ClaudeEnterpriseSkill struct {
 	ChatDistinctConversationSkillUsedCount  int64  `json:"chatDistinctConversationSkillUsedCount"`
 	ClaudeCodeDistinctSessionSkillUsedCount int64  `json:"claudeCodeDistinctSessionSkillUsedCount"`
 	CoworkDistinctSessionSkillUsedCount     int64  `json:"coworkDistinctSessionSkillUsedCount"`
-	SkillId                                 string `gorm:"-" json:"-"`
-	SkillType                               string `gorm:"-" json:"-"`
-	CreatorUserId                           string `gorm:"-" json:"-"`
-	CreatorEmail                            string `gorm:"-" json:"-"`
-	ActiveUsers                             int    `gorm:"-" json:"-"`
-	UsageCount                              int64  `gorm:"-" json:"-"`
 
 	RawJson string `json:"rawJson" gorm:"type:longtext"`
 }

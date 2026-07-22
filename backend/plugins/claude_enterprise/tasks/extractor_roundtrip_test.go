@@ -97,7 +97,7 @@ func TestExtractSummariesEntryPointSavesRawAndTypedRows(t *testing.T) {
 func TestExtractUserActivitiesEntryPointSavesAnalyticsRecord(t *testing.T) {
 	ctx, mockDal := newSingleRowExtractSubTaskContext(
 		validClaudeEnterpriseTaskData(),
-		[]byte(`{"date":"2026-01-05","user":{"id":"user_synthetic_001","email":"dev@example.invalid"},"product":"claude_code","num_sessions":4}`),
+		[]byte(`{"date":"2026-01-05","user":{"id":"user_synthetic_001","email_address":"dev@example.invalid"},"claude_code_metrics":{"core_metrics":{"distinct_session_count":4}}}`),
 	)
 
 	err := ExtractUserActivities(ctx)
@@ -111,7 +111,7 @@ func TestExtractUserActivitiesEntryPointSavesAnalyticsRecord(t *testing.T) {
 func TestExtractUserUsageReportEntryPointSavesRawAndTypedRows(t *testing.T) {
 	ctx, mockDal := newSingleRowExtractSubTaskContext(
 		validClaudeEnterpriseTaskData(),
-		[]byte(`{"starting_at":"2026-01-05T00:00:00Z","ending_at":"2026-01-06T00:00:00Z","user":{"id":"user_synthetic_001","email":"dev@example.invalid"},"product":"claude_code","model":"claude-sonnet-4","input_tokens":100,"output_tokens":50}`),
+		[]byte(`{"starting_at":"2026-01-05T00:00:00Z","ending_at":"2026-01-06T00:00:00Z","actor":{"user_id":"user_synthetic_001","email":"dev@example.invalid","deleted":false},"product":"claude_code","model":"claude-sonnet-4","uncached_input_tokens":100,"output_tokens":50}`),
 	)
 
 	err := ExtractUserUsageReport(ctx)
@@ -125,7 +125,7 @@ func TestExtractUserUsageReportEntryPointSavesRawAndTypedRows(t *testing.T) {
 func TestExtractUserCostReportEntryPointSavesRawAndTypedRows(t *testing.T) {
 	ctx, mockDal := newSingleRowExtractSubTaskContext(
 		validClaudeEnterpriseTaskData(),
-		[]byte(`{"starting_at":"2026-01-05T00:00:00Z","ending_at":"2026-01-06T00:00:00Z","user":{"id":"user_synthetic_001","email":"dev@example.invalid"},"product":"claude_code","model":"claude-sonnet-4","cost_type":"tokens","amount":"1.2345","currency":"USD"}`),
+		[]byte(`{"starting_at":"2026-01-05T00:00:00Z","ending_at":"2026-01-06T00:00:00Z","actor":{"user_id":"user_synthetic_001","email":"dev@example.invalid","deleted":false},"product":"claude_code","model":"claude-sonnet-4","cost_type":"tokens","amount":"1.2345","currency":"USD"}`),
 	)
 
 	err := ExtractUserCostReport(ctx)
@@ -139,7 +139,7 @@ func TestExtractUserCostReportEntryPointSavesRawAndTypedRows(t *testing.T) {
 func TestExtractSkillsEntryPointSavesRawAndTypedRows(t *testing.T) {
 	ctx, mockDal := newSingleRowExtractSubTaskContext(
 		validClaudeEnterpriseTaskData(),
-		[]byte(`{"date":"2026-01-05","skill_id":"skill_synthetic_001","skill_name":"Doc Search"}`),
+		[]byte(`{"date":"2026-01-05","skill_name":"Doc Search","distinct_user_count":2,"invocation_count":5}`),
 	)
 
 	err := ExtractSkills(ctx)

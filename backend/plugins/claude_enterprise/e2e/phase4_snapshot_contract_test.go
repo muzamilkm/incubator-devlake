@@ -51,7 +51,7 @@ func TestPhase4E2ESnapshotContract(t *testing.T) {
 	require.Equal(t, uint64(1), summary.ConnectionId)
 	require.Equal(t, "org_synthetic_001", summary.OrganizationId)
 	require.Equal(t, "2026-01-05", summary.Date)
-	require.Equal(t, 42, summary.AssignedSeats)
-	require.Equal(t, 18, summary.DailyActiveUsers)
+	require.Equal(t, 42, summary.AssignedSeatCount)
+	require.Equal(t, 18, summary.DailyActiveUserCount)
 	require.JSONEq(t, string(rows[0]), summary.RawJson)
 }

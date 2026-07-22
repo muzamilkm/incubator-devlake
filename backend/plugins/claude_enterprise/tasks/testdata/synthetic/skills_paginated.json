@@ -3,15 +3,24 @@
     {
       "date": "2026-01-06",
       "grain": "daily",
-      "skill_id": "skill_synthetic_003",
       "skill_name": "Meeting Notes Summarizer",
-      "skill_type": "custom",
-      "creator": {
-        "id": "user_synthetic_003",
-        "email": "reviewer@example.invalid"
+      "skill_display_name": "Meeting Notes Summarizer",
+      "distinct_user_count": 3,
+      "invocation_count": 15,
+      "enable_count": 1,
+      "attributed_list_price": "3.2100",
+      "estimated_overage_spend": "0.2100",
+      "currency": "USD",
+      "share_status": "private",
+      "chat_metrics": {
+        "distinct_conversation_skill_used_count": 8
       },
-      "active_users": 3,
-      "usage_count": 15
+      "claude_code_metrics": {
+        "distinct_session_skill_used_count": 4
+      },
+      "cowork_metrics": {
+        "distinct_session_skill_used_count": 1
+      }
     }
   ],
   "next_page": null

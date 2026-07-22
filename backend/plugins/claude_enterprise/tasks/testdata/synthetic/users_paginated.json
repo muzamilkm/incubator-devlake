@@ -5,10 +5,12 @@
       "grain": "daily",
       "user": {
         "id": "user_synthetic_003",
-        "email": "reviewer@example.invalid"
+        "email_address": "reviewer@example.invalid"
       },
-      "product": "cowork",
-      "messages": 12
+      "cowork_metrics": {
+        "distinct_session_count": 2,
+        "message_count": 12
+      }
     }
   ],
   "next_page": null

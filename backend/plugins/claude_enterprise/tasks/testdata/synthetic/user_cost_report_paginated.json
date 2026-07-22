@@ -5,16 +5,22 @@
       "ending_at": "2026-01-07T00:00:00Z",
       "data_refreshed_at": "2026-01-07T04:00:00Z",
       "organization_id": "org_synthetic_001",
-      "user": {
-        "id": "user_synthetic_002",
-        "email": "analyst@example.invalid"
+      "actor": {
+        "user_id": "user_synthetic_002",
+        "email": "analyst@example.invalid",
+        "deleted": false
       },
       "product": "chat",
       "model": "claude-opus-4",
+      "context_window": "0-200k",
+      "inference_geo": "global",
+      "speed": "standard",
       "cost_type": "tokens",
+      "token_type": "input",
       "amount": "45.6789",
       "list_amount": "60.0000",
-      "currency": "USD"
+      "currency": "USD",
+      "requests": 11
     }
   ],
   "next_page": null

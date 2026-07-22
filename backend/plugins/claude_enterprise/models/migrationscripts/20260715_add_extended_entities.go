@@ -50,18 +50,23 @@ func (script *addClaudeEnterpriseExtendedEntities) Name() string {
 
 type claudeSkill20260715 struct {
 	archived.NoPKModel
-	ConnectionId   uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId        string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
-	Date           string `gorm:"primaryKey;type:varchar(32)" json:"date"`
-	SkillId        string `gorm:"primaryKey;type:varchar(255)" json:"skillId"`
-	SkillName      string `gorm:"type:varchar(255)" json:"skillName"`
-	SkillType      string `gorm:"type:varchar(100)" json:"skillType"`
-	CreatorUserId  string `gorm:"type:varchar(255)" json:"creatorUserId"`
-	CreatorEmail   string `gorm:"type:varchar(255)" json:"creatorEmail"`
-	ActiveUsers    int    `json:"activeUsers"`
-	UsageCount     int64  `json:"usageCount"`
-	RawJson        string `gorm:"type:longtext" json:"rawJson"`
+	ConnectionId                            uint64 `gorm:"primaryKey" json:"connectionId"`
+	ScopeId                                 string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
+	OrganizationId                          string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	Date                                    string `gorm:"primaryKey;type:varchar(32)" json:"date"`
+	SkillName                               string `gorm:"primaryKey;type:varchar(255)" json:"skillName"`
+	SkillDisplayName                        string `gorm:"type:varchar(255)" json:"skillDisplayName"`
+	DistinctUserCount                       int64  `json:"distinctUserCount"`
+	InvocationCount                         int64  `json:"invocationCount"`
+	EnableCount                             int64  `json:"enableCount"`
+	AttributedListPrice                     string `gorm:"type:varchar(128)" json:"attributedListPrice"`
+	EstimatedOverageSpend                   string `gorm:"type:varchar(128)" json:"estimatedOverageSpend"`
+	Currency                                string `gorm:"type:varchar(16)" json:"currency"`
+	ShareStatus                             string `gorm:"type:varchar(32)" json:"shareStatus"`
+	ChatDistinctConversationSkillUsedCount  int64  `json:"chatDistinctConversationSkillUsedCount"`
+	ClaudeCodeDistinctSessionSkillUsedCount int64  `json:"claudeCodeDistinctSessionSkillUsedCount"`
+	CoworkDistinctSessionSkillUsedCount     int64  `json:"coworkDistinctSessionSkillUsedCount"`
+	RawJson                                 string `gorm:"type:longtext" json:"rawJson"`
 }
 
 func (claudeSkill20260715) TableName() string {
@@ -70,17 +75,19 @@ func (claudeSkill20260715) TableName() string {
 
 type claudeConnector20260715 struct {
 	archived.NoPKModel
-	ConnectionId   uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId        string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
-	Date           string `gorm:"primaryKey;type:varchar(32)" json:"date"`
-	ConnectorId    string `gorm:"primaryKey;type:varchar(255)" json:"connectorId"`
-	ConnectorName  string `gorm:"type:varchar(255)" json:"connectorName"`
-	ConnectorType  string `gorm:"type:varchar(100)" json:"connectorType"`
-	Status         string `gorm:"type:varchar(50)" json:"status"`
-	ActiveUsers    int    `json:"activeUsers"`
-	UsageCount     int64  `json:"usageCount"`
-	RawJson        string `gorm:"type:longtext" json:"rawJson"`
+	ConnectionId                                uint64 `gorm:"primaryKey" json:"connectionId"`
+	ScopeId                                     string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
+	OrganizationId                              string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	Date                                        string `gorm:"primaryKey;type:varchar(32)" json:"date"`
+	ConnectorName                               string `gorm:"primaryKey;type:varchar(255)" json:"connectorName"`
+	DistinctUserCount                           int64  `json:"distinctUserCount"`
+	ReadCallCount                               int64  `json:"readCallCount"`
+	WriteCallCount                              int64  `json:"writeCallCount"`
+	UnclassifiedCallCount                       int64  `json:"unclassifiedCallCount"`
+	ChatDistinctConversationConnectorUsedCount  int64  `json:"chatDistinctConversationConnectorUsedCount"`
+	ClaudeCodeDistinctSessionConnectorUsedCount int64  `json:"claudeCodeDistinctSessionConnectorUsedCount"`
+	CoworkDistinctSessionConnectorUsedCount     int64  `json:"coworkDistinctSessionConnectorUsedCount"`
+	RawJson                                     string `gorm:"type:longtext" json:"rawJson"`
 }
 
 func (claudeConnector20260715) TableName() string {
@@ -89,17 +96,19 @@ func (claudeConnector20260715) TableName() string {
 
 type claudeChatProject20260715 struct {
 	archived.NoPKModel
-	ConnectionId       uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId            string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId     string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
-	Date               string `gorm:"primaryKey;type:varchar(32)" json:"date"`
-	ProjectId          string `gorm:"primaryKey;type:varchar(255)" json:"projectId"`
-	ProjectName        string `gorm:"type:varchar(255)" json:"projectName"`
-	CreatorUserId      string `gorm:"type:varchar(255)" json:"creatorUserId"`
-	CreatorEmail       string `gorm:"type:varchar(255)" json:"creatorEmail"`
-	MembersCount       int    `json:"membersCount"`
-	ConversationsCount int64  `json:"conversationsCount"`
-	RawJson            string `gorm:"type:longtext" json:"rawJson"`
+	ConnectionId              uint64 `gorm:"primaryKey" json:"connectionId"`
+	ScopeId                   string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
+	OrganizationId            string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	Date                      string `gorm:"primaryKey;type:varchar(32)" json:"date"`
+	ProjectId                 string `gorm:"primaryKey;type:varchar(255)" json:"projectId"`
+	ProjectName               string `gorm:"type:varchar(255)" json:"projectName"`
+	CreatedAt                 string `gorm:"type:varchar(64)" json:"createdAt"`
+	CreatorUserId             string `gorm:"type:varchar(255)" json:"creatorUserId"`
+	CreatorEmail              string `gorm:"type:varchar(255)" json:"creatorEmail"`
+	DistinctUserCount         int64  `json:"distinctUserCount"`
+	DistinctConversationCount int64  `json:"distinctConversationCount"`
+	MessageCount              int64  `json:"messageCount"`
+	RawJson                   string `gorm:"type:longtext" json:"rawJson"`
 }
 
 func (claudeChatProject20260715) TableName() string {
@@ -108,17 +117,18 @@ func (claudeChatProject20260715) TableName() string {
 
 type claudePluginAdoption20260715 struct {
 	archived.NoPKModel
-	ConnectionId   uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId        string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
-	Date           string `gorm:"primaryKey;type:varchar(32)" json:"date"`
-	PluginId       string `gorm:"primaryKey;type:varchar(255)" json:"pluginId"`
-	PluginName     string `gorm:"type:varchar(255)" json:"pluginName"`
-	PluginType     string `gorm:"type:varchar(100)" json:"pluginType"`
-	Publisher      string `gorm:"type:varchar(255)" json:"publisher"`
-	ActiveUsers    int    `json:"activeUsers"`
-	InstallCount   int64  `json:"installCount"`
-	RawJson        string `gorm:"type:longtext" json:"rawJson"`
+	ConnectionId                             uint64 `gorm:"primaryKey" json:"connectionId"`
+	ScopeId                                  string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
+	OrganizationId                           string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	Date                                     string `gorm:"primaryKey;type:varchar(32)" json:"date"`
+	PluginId                                 string `gorm:"type:varchar(255)" json:"pluginId"`
+	PluginName                               string `gorm:"primaryKey;type:varchar(255)" json:"pluginName"`
+	DistinctUserCount                        int64  `json:"distinctUserCount"`
+	InstallCount                             int64  `json:"installCount"`
+	InvocationCount                          int64  `json:"invocationCount"`
+	ClaudeCodeDistinctSessionPluginUsedCount int64  `json:"claudeCodeDistinctSessionPluginUsedCount"`
+	CoworkDistinctSessionPluginUsedCount     int64  `json:"coworkDistinctSessionPluginUsedCount"`
+	RawJson                                  string `gorm:"type:longtext" json:"rawJson"`
 }
 
 func (claudePluginAdoption20260715) TableName() string {
@@ -127,18 +137,16 @@ func (claudePluginAdoption20260715) TableName() string {
 
 type claudeArtifact20260715 struct {
 	archived.NoPKModel
-	ConnectionId   uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId        string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
-	Date           string `gorm:"primaryKey;type:varchar(32)" json:"date"`
-	ArtifactId     string `gorm:"primaryKey;type:varchar(255)" json:"artifactId"`
-	ArtifactTitle  string `gorm:"type:varchar(255)" json:"artifactTitle"`
-	ArtifactType   string `gorm:"type:varchar(100)" json:"artifactType"`
-	CreatorUserId  string `gorm:"type:varchar(255)" json:"creatorUserId"`
-	CreatorEmail   string `gorm:"type:varchar(255)" json:"creatorEmail"`
-	ViewCount      int64  `json:"viewCount"`
-	ShareCount     int64  `json:"shareCount"`
-	RawJson        string `gorm:"type:longtext" json:"rawJson"`
+	ConnectionId                   uint64 `gorm:"primaryKey" json:"connectionId"`
+	ScopeId                        string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
+	OrganizationId                 string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	Date                           string `gorm:"primaryKey;type:varchar(32)" json:"date"`
+	ArtifactType                   string `gorm:"primaryKey;type:varchar(100)" json:"artifactType"`
+	IsShared                       bool   `gorm:"primaryKey" json:"isShared"`
+	ArtifactsCreatedCount          int64  `json:"artifactsCreatedCount"`
+	PublishedArtifactsCreatedCount int64  `json:"publishedArtifactsCreatedCount"`
+	DistinctUserCount              int64  `json:"distinctUserCount"`
+	RawJson                        string `gorm:"type:longtext" json:"rawJson"`
 }
 
 func (claudeArtifact20260715) TableName() string {

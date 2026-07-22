@@ -69,11 +69,6 @@ func BuildConnectorRecord(raw []byte, params analyticsRawParams) (*models.Claude
 		ChatDistinctConversationConnectorUsedCount:  firstInt64(item, "chat_metrics.distinct_conversation_connector_used_count"),
 		ClaudeCodeDistinctSessionConnectorUsedCount: firstInt64(item, "claude_code_metrics.distinct_session_connector_used_count"),
 		CoworkDistinctSessionConnectorUsedCount:     firstInt64(item, "cowork_metrics.distinct_session_connector_used_count"),
-		ConnectorId:                                 firstString(item, "connector_id"),
-		ConnectorType:                               firstString(item, "connector_type"),
-		Status:                                      firstString(item, "status"),
-		ActiveUsers:                                 firstInt(item, "active_users"),
-		UsageCount:                                  firstInt64(item, "usage_count"),
 		RawJson:                                     string(raw),
 	}, nil
 }

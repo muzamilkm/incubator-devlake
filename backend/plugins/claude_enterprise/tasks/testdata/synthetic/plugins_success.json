@@ -5,20 +5,30 @@
       "grain": "daily",
       "plugin_id": "plugin_synthetic_001",
       "plugin_name": "Linear Sync",
-      "plugin_type": "integration",
-      "publisher": "Example Publisher",
-      "active_users": 8,
-      "install_count": 30
+      "distinct_user_count": 8,
+      "install_count": 30,
+      "invocation_count": 64,
+      "claude_code_metrics": {
+        "distinct_session_plugin_used_count": 40
+      },
+      "cowork_metrics": {
+        "distinct_session_plugin_used_count": 9
+      }
     },
     {
       "date": "2026-01-05",
       "grain": "daily",
       "plugin_id": "plugin_synthetic_002",
       "plugin_name": "Figma Preview",
-      "plugin_type": "integration",
-      "publisher": "Example Publisher",
-      "active_users": 5,
-      "install_count": 12
+      "distinct_user_count": 5,
+      "install_count": 12,
+      "invocation_count": 25,
+      "claude_code_metrics": {
+        "distinct_session_plugin_used_count": 13
+      },
+      "cowork_metrics": {
+        "distinct_session_plugin_used_count": 4
+      }
     }
   ],
   "next_page": "cursor_synthetic_plugins_2"

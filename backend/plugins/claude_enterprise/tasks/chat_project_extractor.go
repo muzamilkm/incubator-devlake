@@ -70,8 +70,6 @@ func BuildChatProjectRecord(raw []byte, params analyticsRawParams) (*models.Clau
 		DistinctUserCount:         firstInt64(item, "distinct_user_count"),
 		DistinctConversationCount: firstInt64(item, "distinct_conversation_count"),
 		MessageCount:              firstInt64(item, "message_count"),
-		MembersCount:              firstInt(item, "members_count"),
-		ConversationsCount:        firstInt64(item, "conversations_count"),
 		RawJson:                   string(raw),
 	}, nil
 }

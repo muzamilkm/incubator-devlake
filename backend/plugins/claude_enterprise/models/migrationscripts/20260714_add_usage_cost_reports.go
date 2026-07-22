@@ -44,29 +44,30 @@ func (script *addClaudeEnterpriseUsageCostReports) Name() string {
 
 type claudeUsageReport20260714 struct {
 	archived.NoPKModel
-	ConnectionId          uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId               string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId        string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
-	StartingAt            string `gorm:"primaryKey;type:varchar(64)" json:"startingAt"`
-	EndingAt              string `gorm:"primaryKey;type:varchar(64)" json:"endingAt"`
-	UserId                string `gorm:"primaryKey;type:varchar(255)" json:"userId"`
-	UserEmail             string `gorm:"type:varchar(255)" json:"userEmail"`
-	DeletedActor          bool   `json:"deletedActor"`
-	Product               string `gorm:"primaryKey;type:varchar(100)" json:"product"`
-	Model                 string `gorm:"primaryKey;type:varchar(255)" json:"model"`
-	ContextWindow         string `gorm:"type:varchar(32)" json:"contextWindow"`
-	InferenceGeo          string `gorm:"type:varchar(32)" json:"inferenceGeo"`
-	Speed                 string `gorm:"type:varchar(32)" json:"speed"`
-	DataRefreshedAt       string `gorm:"type:varchar(64)" json:"dataRefreshedAt"`
-	InputTokens           int64  `json:"inputTokens"`
-	OutputTokens          int64  `json:"outputTokens"`
-	CacheReadTokens       int64  `json:"cacheReadTokens"`
-	CacheCreation1hTokens int64  `json:"cacheCreation1hTokens"`
-	CacheCreation5mTokens int64  `json:"cacheCreation5mTokens"`
-	TotalTokens           int64  `json:"totalTokens"`
-	RequestCount          int64  `json:"requestCount"`
-	WebSearchRequests     int64  `json:"webSearchRequests"`
-	RawJson               string `gorm:"type:longtext" json:"rawJson"`
+	ReportId                   string `gorm:"primaryKey;type:varchar(64)" json:"reportId"`
+	ConnectionId               uint64 `gorm:"primaryKey" json:"connectionId"`
+	ScopeId                    string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
+	OrganizationId             string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	StartingAt                 string `gorm:"primaryKey;type:varchar(64)" json:"startingAt"`
+	EndingAt                   string `gorm:"primaryKey;type:varchar(64)" json:"endingAt"`
+	UserId                     string `gorm:"primaryKey;type:varchar(255)" json:"userId"`
+	UserEmail                  string `gorm:"type:varchar(255)" json:"userEmail"`
+	DeletedActor               bool   `json:"deletedActor"`
+	Product                    string `gorm:"type:varchar(100)" json:"product"`
+	Model                      string `gorm:"primaryKey;type:varchar(255)" json:"model"`
+	ContextWindow              string `gorm:"type:varchar(32)" json:"contextWindow"`
+	InferenceGeo               string `gorm:"type:varchar(32)" json:"inferenceGeo"`
+	Speed                      string `gorm:"type:varchar(32)" json:"speed"`
+	DataRefreshedAt            string `gorm:"type:varchar(64)" json:"dataRefreshedAt"`
+	UncachedInputTokens        int64  `json:"uncachedInputTokens"`
+	OutputTokens               int64  `json:"outputTokens"`
+	CacheReadInputTokens       int64  `json:"cacheReadInputTokens"`
+	CacheCreation1hInputTokens int64  `json:"cacheCreation1hInputTokens" gorm:"column:cache_creation_1h_input_tokens"`
+	CacheCreation5mInputTokens int64  `json:"cacheCreation5mInputTokens" gorm:"column:cache_creation_5m_input_tokens"`
+	TotalTokens                int64  `json:"totalTokens"`
+	RequestCount               int64  `json:"requestCount"`
+	WebSearchRequests          int64  `json:"webSearchRequests"`
+	RawJson                    string `gorm:"type:longtext" json:"rawJson"`
 }
 
 func (claudeUsageReport20260714) TableName() string {
@@ -75,6 +76,7 @@ func (claudeUsageReport20260714) TableName() string {
 
 type claudeCostReport20260714 struct {
 	archived.NoPKModel
+	ReportId        string `gorm:"primaryKey;type:varchar(64)" json:"reportId"`
 	ConnectionId    uint64 `gorm:"primaryKey" json:"connectionId"`
 	ScopeId         string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
 	OrganizationId  string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
@@ -83,13 +85,13 @@ type claudeCostReport20260714 struct {
 	UserId          string `gorm:"primaryKey;type:varchar(255)" json:"userId"`
 	UserEmail       string `gorm:"type:varchar(255)" json:"userEmail"`
 	DeletedActor    bool   `json:"deletedActor"`
-	Product         string `gorm:"primaryKey;type:varchar(100)" json:"product"`
+	Product         string `gorm:"type:varchar(100)" json:"product"`
 	Model           string `gorm:"primaryKey;type:varchar(255)" json:"model"`
 	ContextWindow   string `gorm:"type:varchar(32)" json:"contextWindow"`
 	InferenceGeo    string `gorm:"type:varchar(32)" json:"inferenceGeo"`
 	Speed           string `gorm:"type:varchar(32)" json:"speed"`
-	CostType        string `gorm:"primaryKey;type:varchar(100)" json:"costType"`
-	TokenType       string `gorm:"primaryKey;type:varchar(100)" json:"tokenType"`
+	CostType        string `gorm:"type:varchar(100)" json:"costType"`
+	TokenType       string `gorm:"type:varchar(100)" json:"tokenType"`
 	Currency        string `gorm:"primaryKey;type:varchar(16)" json:"currency"`
 	DataRefreshedAt string `gorm:"type:varchar(64)" json:"dataRefreshedAt"`
 	Amount          string `gorm:"type:varchar(128)" json:"amount"`

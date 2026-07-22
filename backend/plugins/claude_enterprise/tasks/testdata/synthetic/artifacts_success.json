@@ -3,28 +3,20 @@
     {
       "date": "2026-01-05",
       "grain": "daily",
-      "artifact_id": "artifact_synthetic_001",
-      "artifact_title": "Quarterly Report Draft",
-      "artifact_type": "document",
-      "creator": {
-        "id": "user_synthetic_001",
-        "email": "developer@example.invalid"
-      },
-      "view_count": 40,
-      "share_count": 3
+      "artifact_type": "text/markdown",
+      "is_shared": true,
+      "artifacts_created_count": 40,
+      "published_artifacts_created_count": 3,
+      "distinct_user_count": 7
     },
     {
       "date": "2026-01-05",
       "grain": "daily",
-      "artifact_id": "artifact_synthetic_002",
-      "artifact_title": "Onboarding Checklist Component",
-      "artifact_type": "code",
-      "creator": {
-        "id": "user_synthetic_002",
-        "email": "analyst@example.invalid"
-      },
-      "view_count": 17,
-      "share_count": 1
+      "artifact_type": "application/vnd.ant.react",
+      "is_shared": false,
+      "artifacts_created_count": 17,
+      "published_artifacts_created_count": 1,
+      "distinct_user_count": 4
     }
   ],
   "next_page": "cursor_synthetic_artifacts_2"

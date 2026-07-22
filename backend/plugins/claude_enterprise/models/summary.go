@@ -34,11 +34,23 @@ type ClaudeEnterpriseSummary struct {
 	StartingAt     string `json:"startingAt" gorm:"type:varchar(64)"`
 	EndingAt       string `json:"endingAt" gorm:"type:varchar(64)"`
 
-	AssignedSeats      int `json:"assignedSeats"`
-	PendingInvites     int `json:"pendingInvites"`
-	DailyActiveUsers   int `json:"dailyActiveUsers"`
-	WeeklyActiveUsers  int `json:"weeklyActiveUsers"`
-	MonthlyActiveUsers int `json:"monthlyActiveUsers"`
+	AssignedSeatCount                int     `json:"assignedSeatCount"`
+	PendingInviteCount               int     `json:"pendingInviteCount"`
+	DailyActiveUserCount             int     `json:"dailyActiveUserCount"`
+	WeeklyActiveUserCount            int     `json:"weeklyActiveUserCount"`
+	MonthlyActiveUserCount           int     `json:"monthlyActiveUserCount"`
+	DailyAdoptionRate                float64 `json:"dailyAdoptionRate"`
+	WeeklyAdoptionRate               float64 `json:"weeklyAdoptionRate"`
+	MonthlyAdoptionRate              float64 `json:"monthlyAdoptionRate"`
+	ChatDailyActiveUserCount         int     `json:"chatDailyActiveUserCount"`
+	ChatWeeklyActiveUserCount        int     `json:"chatWeeklyActiveUserCount"`
+	ChatMonthlyActiveUserCount       int     `json:"chatMonthlyActiveUserCount"`
+	ClaudeCodeDailyActiveUserCount   int     `json:"claudeCodeDailyActiveUserCount"`
+	ClaudeCodeWeeklyActiveUserCount  int     `json:"claudeCodeWeeklyActiveUserCount"`
+	ClaudeCodeMonthlyActiveUserCount int     `json:"claudeCodeMonthlyActiveUserCount"`
+	CoworkDailyActiveUserCount       int     `json:"coworkDailyActiveUserCount"`
+	CoworkWeeklyActiveUserCount      int     `json:"coworkWeeklyActiveUserCount"`
+	CoworkMonthlyActiveUserCount     int     `json:"coworkMonthlyActiveUserCount"`
 
 	RawJson string `json:"rawJson" gorm:"type:longtext"`
 }

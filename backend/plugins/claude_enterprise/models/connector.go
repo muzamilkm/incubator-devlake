@@ -45,11 +45,6 @@ type ClaudeEnterpriseConnector struct {
 	ChatDistinctConversationConnectorUsedCount  int64  `json:"chatDistinctConversationConnectorUsedCount"`
 	ClaudeCodeDistinctSessionConnectorUsedCount int64  `json:"claudeCodeDistinctSessionConnectorUsedCount"`
 	CoworkDistinctSessionConnectorUsedCount     int64  `json:"coworkDistinctSessionConnectorUsedCount"`
-	ConnectorId                                 string `gorm:"-" json:"-"`
-	ConnectorType                               string `gorm:"-" json:"-"`
-	Status                                      string `gorm:"-" json:"-"`
-	ActiveUsers                                 int    `gorm:"-" json:"-"`
-	UsageCount                                  int64  `gorm:"-" json:"-"`
 
 	RawJson string `json:"rawJson" gorm:"type:longtext"`
 }

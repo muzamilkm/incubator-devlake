@@ -5,12 +5,14 @@
       "grain": "daily",
       "project_id": "project_synthetic_003",
       "project_name": "Design Review",
-      "creator": {
+      "created_at": "2026-01-04T10:00:00Z",
+      "created_by": {
         "id": "user_synthetic_003",
-        "email": "reviewer@example.invalid"
+        "email_address": "reviewer@example.invalid"
       },
-      "members_count": 2,
-      "conversations_count": 6
+      "distinct_user_count": 2,
+      "distinct_conversation_count": 6,
+      "message_count": 18
     }
   ],
   "next_page": null

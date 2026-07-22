@@ -53,11 +53,9 @@ func TestPhase14SkillsRawToToolSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), skill.ConnectionId)
 	require.Equal(t, "org_synthetic_001", skill.OrganizationId)
-	require.Equal(t, "skill_synthetic_001", skill.SkillId)
 	require.Equal(t, "Code Review Assistant", skill.SkillName)
-	require.Equal(t, "custom", skill.SkillType)
-	require.Equal(t, 6, skill.ActiveUsers)
-	require.Equal(t, int64(42), skill.UsageCount)
+	require.Equal(t, int64(6), skill.DistinctUserCount)
+	require.Equal(t, int64(42), skill.InvocationCount)
 	require.JSONEq(t, string(rows[0]), skill.RawJson)
 }
 
@@ -76,11 +74,9 @@ func TestPhase14ConnectorsRawToToolSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), connector.ConnectionId)
 	require.Equal(t, "org_synthetic_001", connector.OrganizationId)
-	require.Equal(t, "connector_synthetic_001", connector.ConnectorId)
 	require.Equal(t, "Google Drive", connector.ConnectorName)
-	require.Equal(t, "active", connector.Status)
-	require.Equal(t, 9, connector.ActiveUsers)
-	require.Equal(t, int64(54), connector.UsageCount)
+	require.Equal(t, int64(9), connector.DistinctUserCount)
+	require.Equal(t, int64(44), connector.ReadCallCount)
 	require.JSONEq(t, string(rows[0]), connector.RawJson)
 }
 
@@ -101,8 +97,8 @@ func TestPhase14ChatProjectsRawToToolSnapshot(t *testing.T) {
 	require.Equal(t, "org_synthetic_001", project.OrganizationId)
 	require.Equal(t, "project_synthetic_001", project.ProjectId)
 	require.Equal(t, "Q1 Launch Planning", project.ProjectName)
-	require.Equal(t, 5, project.MembersCount)
-	require.Equal(t, int64(27), project.ConversationsCount)
+	require.Equal(t, int64(5), project.DistinctUserCount)
+	require.Equal(t, int64(27), project.DistinctConversationCount)
 	require.JSONEq(t, string(rows[0]), project.RawJson)
 }
 
@@ -123,8 +119,7 @@ func TestPhase14PluginsRawToToolSnapshot(t *testing.T) {
 	require.Equal(t, "org_synthetic_001", pluginRow.OrganizationId)
 	require.Equal(t, "plugin_synthetic_001", pluginRow.PluginId)
 	require.Equal(t, "Linear Sync", pluginRow.PluginName)
-	require.Equal(t, "Example Publisher", pluginRow.Publisher)
-	require.Equal(t, 8, pluginRow.ActiveUsers)
+	require.Equal(t, int64(8), pluginRow.DistinctUserCount)
 	require.Equal(t, int64(30), pluginRow.InstallCount)
 	require.JSONEq(t, string(rows[0]), pluginRow.RawJson)
 }
@@ -144,11 +139,10 @@ func TestPhase14ArtifactsRawToToolSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), artifact.ConnectionId)
 	require.Equal(t, "org_synthetic_001", artifact.OrganizationId)
-	require.Equal(t, "artifact_synthetic_001", artifact.ArtifactId)
-	require.Equal(t, "Quarterly Report Draft", artifact.ArtifactTitle)
-	require.Equal(t, "document", artifact.ArtifactType)
-	require.Equal(t, int64(40), artifact.ViewCount)
-	require.Equal(t, int64(3), artifact.ShareCount)
+	require.Equal(t, "text/markdown", artifact.ArtifactType)
+	require.True(t, artifact.IsShared)
+	require.Equal(t, int64(40), artifact.ArtifactsCreatedCount)
+	require.Equal(t, int64(3), artifact.PublishedArtifactsCreatedCount)
 	require.JSONEq(t, string(rows[0]), artifact.RawJson)
 }
 

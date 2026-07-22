@@ -106,7 +106,7 @@ func TestCollectUserActivitiesEntryPointStopsPaginationOnShortPage(t *testing.T)
 		require.Equal(t, "/organizations/analytics/users", r.URL.Path)
 		require.Equal(t, "1000", r.URL.Query().Get("limit"))
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":[{"date":"2026-01-05","user":{"id":"user_synthetic_001","email":"dev@example.invalid"},"product":"claude_code"}],"next_page":""}`))
+		_, _ = w.Write([]byte(`{"data":[{"date":"2026-01-05","user":{"id":"user_synthetic_001","email_address":"dev@example.invalid"},"claude_code_metrics":{"core_metrics":{"distinct_session_count":1}}}],"next_page":""}`))
 	}))
 	defer server.Close()
 

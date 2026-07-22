@@ -26,6 +26,7 @@ import "github.com/apache/incubator-devlake/core/models/common"
 type ClaudeEnterpriseUsageReport struct {
 	common.NoPKModel
 
+	ReportId        string `gorm:"primaryKey;type:varchar(64)" json:"reportId"`
 	ConnectionId    uint64 `gorm:"primaryKey" json:"connectionId"`
 	ScopeId         string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
 	OrganizationId  string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
@@ -34,21 +35,21 @@ type ClaudeEnterpriseUsageReport struct {
 	UserId          string `gorm:"primaryKey;type:varchar(255)" json:"userId"`
 	UserEmail       string `gorm:"type:varchar(255)" json:"userEmail"`
 	DeletedActor    bool   `json:"deletedActor"`
-	Product         string `gorm:"primaryKey;type:varchar(100)" json:"product"`
+	Product         string `gorm:"type:varchar(100)" json:"product"`
 	Model           string `gorm:"primaryKey;type:varchar(255)" json:"model"`
 	ContextWindow   string `gorm:"type:varchar(32)" json:"contextWindow"`
 	InferenceGeo    string `gorm:"type:varchar(32)" json:"inferenceGeo"`
 	Speed           string `gorm:"type:varchar(32)" json:"speed"`
 	DataRefreshedAt string `gorm:"type:varchar(64)" json:"dataRefreshedAt"`
 
-	InputTokens           int64 `json:"inputTokens"`
-	OutputTokens          int64 `json:"outputTokens"`
-	CacheReadTokens       int64 `json:"cacheReadTokens"`
-	CacheCreation1hTokens int64 `json:"cacheCreation1hTokens"`
-	CacheCreation5mTokens int64 `json:"cacheCreation5mTokens"`
-	TotalTokens           int64 `json:"totalTokens"`
-	RequestCount          int64 `json:"requestCount"`
-	WebSearchRequests     int64 `json:"webSearchRequests"`
+	UncachedInputTokens        int64 `json:"uncachedInputTokens"`
+	OutputTokens               int64 `json:"outputTokens"`
+	CacheReadInputTokens       int64 `json:"cacheReadInputTokens"`
+	CacheCreation1hInputTokens int64 `json:"cacheCreation1hInputTokens" gorm:"column:cache_creation_1h_input_tokens"`
+	CacheCreation5mInputTokens int64 `json:"cacheCreation5mInputTokens" gorm:"column:cache_creation_5m_input_tokens"`
+	TotalTokens                int64 `json:"totalTokens"`
+	RequestCount               int64 `json:"requestCount"`
+	WebSearchRequests          int64 `json:"webSearchRequests"`
 
 	RawJson string `gorm:"type:longtext" json:"rawJson"`
 }

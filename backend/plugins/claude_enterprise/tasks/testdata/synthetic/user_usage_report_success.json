@@ -5,17 +5,28 @@
       "ending_at": "2026-01-06T00:00:00Z",
       "data_refreshed_at": "2026-01-06T04:00:00Z",
       "organization_id": "org_synthetic_001",
-      "user": {
-        "id": "user_synthetic_001",
-        "email": "developer@example.invalid"
+      "actor": {
+        "user_id": "user_synthetic_001",
+        "email": "developer@example.invalid",
+        "deleted": false
       },
       "product": "claude_code",
       "model": "claude-sonnet-4",
-      "input_tokens": 12345,
+      "context_window": "0-200k",
+      "inference_geo": "global",
+      "speed": "standard",
+      "uncached_input_tokens": 12345,
       "output_tokens": 6789,
-      "cache_read_tokens": 111,
-      "cache_creation_tokens": 222,
-      "request_count": 9
+      "cache_read_input_tokens": 111,
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 222,
+        "ephemeral_5m_input_tokens": 333
+      },
+      "total_tokens": 13456,
+      "requests": 9,
+      "server_tool_use": {
+        "web_search_requests": 2
+      }
     }
   ],
   "next_page": "cursor_synthetic_usage_2"

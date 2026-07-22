@@ -124,13 +124,18 @@ func TestPhase14BuildSkillFromSyntheticFixture(t *testing.T) {
 	require.Equal(t, "org_synthetic_001", skill.ScopeId)
 	require.Equal(t, "org_synthetic_001", skill.OrganizationId)
 	require.Equal(t, "2026-01-05", skill.Date)
-	require.Equal(t, "skill_synthetic_001", skill.SkillId)
 	require.Equal(t, "Code Review Assistant", skill.SkillName)
-	require.Equal(t, "custom", skill.SkillType)
-	require.Equal(t, "user_synthetic_001", skill.CreatorUserId)
-	require.Equal(t, "developer@example.invalid", skill.CreatorEmail)
-	require.Equal(t, 6, skill.ActiveUsers)
-	require.Equal(t, int64(42), skill.UsageCount)
+	require.Equal(t, "Code Review Assistant", skill.SkillDisplayName)
+	require.Equal(t, int64(6), skill.DistinctUserCount)
+	require.Equal(t, int64(42), skill.InvocationCount)
+	require.Equal(t, int64(4), skill.EnableCount)
+	require.Equal(t, "12.3400", skill.AttributedListPrice)
+	require.Equal(t, "1.2300", skill.EstimatedOverageSpend)
+	require.Equal(t, "USD", skill.Currency)
+	require.Equal(t, "organization", skill.ShareStatus)
+	require.Equal(t, int64(20), skill.ChatDistinctConversationSkillUsedCount)
+	require.Equal(t, int64(11), skill.ClaudeCodeDistinctSessionSkillUsedCount)
+	require.Equal(t, int64(3), skill.CoworkDistinctSessionSkillUsedCount)
 	require.JSONEq(t, string(rows[0]), skill.RawJson)
 }
 
@@ -145,12 +150,14 @@ func TestPhase14BuildConnectorFromSyntheticFixture(t *testing.T) {
 		Endpoint:       connectorsEndpoint.Name,
 	})
 	require.NoError(t, err)
-	require.Equal(t, "connector_synthetic_001", connector.ConnectorId)
 	require.Equal(t, "Google Drive", connector.ConnectorName)
-	require.Equal(t, "mcp", connector.ConnectorType)
-	require.Equal(t, "active", connector.Status)
-	require.Equal(t, 9, connector.ActiveUsers)
-	require.Equal(t, int64(54), connector.UsageCount)
+	require.Equal(t, int64(9), connector.DistinctUserCount)
+	require.Equal(t, int64(44), connector.ReadCallCount)
+	require.Equal(t, int64(7), connector.WriteCallCount)
+	require.Equal(t, int64(3), connector.UnclassifiedCallCount)
+	require.Equal(t, int64(33), connector.ChatDistinctConversationConnectorUsedCount)
+	require.Equal(t, int64(18), connector.ClaudeCodeDistinctSessionConnectorUsedCount)
+	require.Equal(t, int64(5), connector.CoworkDistinctSessionConnectorUsedCount)
 	require.JSONEq(t, string(rows[0]), connector.RawJson)
 }
 
@@ -167,10 +174,12 @@ func TestPhase14BuildChatProjectFromSyntheticFixture(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "project_synthetic_001", project.ProjectId)
 	require.Equal(t, "Q1 Launch Planning", project.ProjectName)
+	require.Equal(t, "2026-01-02T10:00:00Z", project.CreatedAt)
 	require.Equal(t, "user_synthetic_001", project.CreatorUserId)
 	require.Equal(t, "developer@example.invalid", project.CreatorEmail)
-	require.Equal(t, 5, project.MembersCount)
-	require.Equal(t, int64(27), project.ConversationsCount)
+	require.Equal(t, int64(5), project.DistinctUserCount)
+	require.Equal(t, int64(27), project.DistinctConversationCount)
+	require.Equal(t, int64(120), project.MessageCount)
 	require.JSONEq(t, string(rows[0]), project.RawJson)
 }
 
@@ -187,10 +196,11 @@ func TestPhase14BuildPluginAdoptionFromSyntheticFixture(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "plugin_synthetic_001", pluginRow.PluginId)
 	require.Equal(t, "Linear Sync", pluginRow.PluginName)
-	require.Equal(t, "integration", pluginRow.PluginType)
-	require.Equal(t, "Example Publisher", pluginRow.Publisher)
-	require.Equal(t, 8, pluginRow.ActiveUsers)
+	require.Equal(t, int64(8), pluginRow.DistinctUserCount)
 	require.Equal(t, int64(30), pluginRow.InstallCount)
+	require.Equal(t, int64(64), pluginRow.InvocationCount)
+	require.Equal(t, int64(40), pluginRow.ClaudeCodeDistinctSessionPluginUsedCount)
+	require.Equal(t, int64(9), pluginRow.CoworkDistinctSessionPluginUsedCount)
 	require.JSONEq(t, string(rows[0]), pluginRow.RawJson)
 }
 
@@ -205,13 +215,11 @@ func TestPhase14BuildArtifactFromSyntheticFixture(t *testing.T) {
 		Endpoint:       artifactsEndpoint.Name,
 	})
 	require.NoError(t, err)
-	require.Equal(t, "artifact_synthetic_001", artifact.ArtifactId)
-	require.Equal(t, "Quarterly Report Draft", artifact.ArtifactTitle)
-	require.Equal(t, "document", artifact.ArtifactType)
-	require.Equal(t, "user_synthetic_001", artifact.CreatorUserId)
-	require.Equal(t, "developer@example.invalid", artifact.CreatorEmail)
-	require.Equal(t, int64(40), artifact.ViewCount)
-	require.Equal(t, int64(3), artifact.ShareCount)
+	require.Equal(t, "text/markdown", artifact.ArtifactType)
+	require.True(t, artifact.IsShared)
+	require.Equal(t, int64(40), artifact.ArtifactsCreatedCount)
+	require.Equal(t, int64(3), artifact.PublishedArtifactsCreatedCount)
+	require.Equal(t, int64(7), artifact.DistinctUserCount)
 	require.JSONEq(t, string(rows[0]), artifact.RawJson)
 }
 
@@ -238,15 +246,15 @@ func TestPhase14ExtendedEntityEmptyFixturesParseToNoRows(t *testing.T) {
 // finishes rather than looping).
 func TestPhase14ExtendedEntityPaginatedFixturesParseRows(t *testing.T) {
 	tests := []struct {
-		name       string
-		expectedId string
-		idField    string
+		name          string
+		expectedValue string
+		field         string
 	}{
-		{"skills_paginated.json", "skill_synthetic_003", "skill_id"},
-		{"connectors_paginated.json", "connector_synthetic_003", "connector_id"},
+		{"skills_paginated.json", "Meeting Notes Summarizer", "skill_name"},
+		{"connectors_paginated.json", "Slack", "connector_name"},
 		{"chat_projects_paginated.json", "project_synthetic_003", "project_id"},
 		{"plugins_paginated.json", "plugin_synthetic_003", "plugin_id"},
-		{"artifacts_paginated.json", "artifact_synthetic_003", "artifact_id"},
+		{"artifacts_paginated.json", "text/markdown", "artifact_type"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -255,7 +263,7 @@ func TestPhase14ExtendedEntityPaginatedFixturesParseRows(t *testing.T) {
 
 			var item map[string]interface{}
 			require.NoError(t, json.Unmarshal(rows[0], &item))
-			require.Equal(t, tt.expectedId, item[tt.idField])
+			require.Equal(t, tt.expectedValue, item[tt.field])
 		})
 	}
 }

@@ -95,7 +95,7 @@ func TestPhase3ArchitectureContract(t *testing.T) {
 }
 
 func TestBuildAnalyticsRecord(t *testing.T) {
-	raw := []byte(`{"date":"2026-01-05","grain":"daily","user":{"id":"user_synthetic_001","email":"dev@example.invalid"},"product":"claude_code","model":"claude-sonnet-4"}`)
+	raw := []byte(`{"date":"2026-01-05","grain":"daily","user":{"id":"user_synthetic_001","email_address":"dev@example.invalid"},"product":"claude_code","model":"claude-sonnet-4"}`)
 	params := analyticsRawParams{
 		ConnectionId:   1,
 		ScopeId:        "org_1",
@@ -119,7 +119,7 @@ func TestBuildAnalyticsRecord(t *testing.T) {
 }
 
 func TestPhase4AnalyticsRecordIdentitySeparatesEndpointAndScope(t *testing.T) {
-	raw := []byte(`{"date":"2026-01-05","grain":"daily","user":{"id":"user_synthetic_001","email":"dev@example.invalid"},"product":"claude_code","model":"claude-sonnet-4"}`)
+	raw := []byte(`{"date":"2026-01-05","grain":"daily","user":{"id":"user_synthetic_001","email_address":"dev@example.invalid"},"product":"claude_code","model":"claude-sonnet-4"}`)
 
 	summary, err := BuildAnalyticsRecord(raw, analyticsRawParams{
 		ConnectionId:   1,
@@ -220,15 +220,15 @@ func TestSyntheticPaginatedFixturesParseRows(t *testing.T) {
 	}{
 		{
 			name:        "users_paginated.json",
-			expectedRow: `{"date":"2026-01-06","grain":"daily","user":{"id":"user_synthetic_003","email":"reviewer@example.invalid"},"product":"cowork","messages":12}`,
+			expectedRow: `{"date":"2026-01-06","grain":"daily","user":{"id":"user_synthetic_003","email_address":"reviewer@example.invalid"},"cowork_metrics":{"distinct_session_count":2,"message_count":12}}`,
 		},
 		{
 			name:        "user_usage_report_paginated.json",
-			expectedRow: `{"starting_at":"2026-01-06T00:00:00Z","ending_at":"2026-01-07T00:00:00Z","data_refreshed_at":"2026-01-07T04:00:00Z","organization_id":"org_synthetic_001","user":{"id":"user_synthetic_002","email":"analyst@example.invalid"},"product":"chat","model":"claude-opus-4","input_tokens":23456,"output_tokens":7890,"cache_read_tokens":333,"cache_creation_tokens":444,"request_count":11}`,
+			expectedRow: `{"starting_at":"2026-01-06T00:00:00Z","ending_at":"2026-01-07T00:00:00Z","data_refreshed_at":"2026-01-07T04:00:00Z","organization_id":"org_synthetic_001","actor":{"user_id":"user_synthetic_002","email":"analyst@example.invalid","deleted":false},"product":"chat","model":"claude-opus-4","context_window":"0-200k","inference_geo":"global","speed":"standard","uncached_input_tokens":23456,"output_tokens":7890,"cache_read_input_tokens":333,"cache_creation":{"ephemeral_1h_input_tokens":444,"ephemeral_5m_input_tokens":555},"total_tokens":31789,"requests":11,"server_tool_use":{"web_search_requests":1}}`,
 		},
 		{
 			name:        "user_cost_report_paginated.json",
-			expectedRow: `{"starting_at":"2026-01-06T00:00:00Z","ending_at":"2026-01-07T00:00:00Z","data_refreshed_at":"2026-01-07T04:00:00Z","organization_id":"org_synthetic_001","user":{"id":"user_synthetic_002","email":"analyst@example.invalid"},"product":"chat","model":"claude-opus-4","cost_type":"tokens","amount":"45.6789","list_amount":"60.0000","currency":"USD"}`,
+			expectedRow: `{"starting_at":"2026-01-06T00:00:00Z","ending_at":"2026-01-07T00:00:00Z","data_refreshed_at":"2026-01-07T04:00:00Z","organization_id":"org_synthetic_001","actor":{"user_id":"user_synthetic_002","email":"analyst@example.invalid","deleted":false},"product":"chat","model":"claude-opus-4","context_window":"0-200k","inference_geo":"global","speed":"standard","cost_type":"tokens","token_type":"input","amount":"45.6789","list_amount":"60.0000","currency":"USD","requests":11}`,
 		},
 	}
 	for _, tt := range tests {
@@ -385,12 +385,16 @@ func TestPhase10BuildSummaryFromSyntheticFixture(t *testing.T) {
 	require.Equal(t, "org_synthetic_001", summary.ScopeId)
 	require.Equal(t, "org_synthetic_001", summary.OrganizationId)
 	require.Equal(t, "2026-01-05", summary.Date)
-	require.Equal(t, "daily", summary.Grain)
-	require.Equal(t, 42, summary.AssignedSeats)
-	require.Equal(t, 3, summary.PendingInvites)
-	require.Equal(t, 18, summary.DailyActiveUsers)
-	require.Equal(t, 31, summary.WeeklyActiveUsers)
-	require.Equal(t, 39, summary.MonthlyActiveUsers)
+	require.Empty(t, summary.Grain)
+	require.Equal(t, 42, summary.AssignedSeatCount)
+	require.Equal(t, 3, summary.PendingInviteCount)
+	require.Equal(t, 18, summary.DailyActiveUserCount)
+	require.Equal(t, 31, summary.WeeklyActiveUserCount)
+	require.Equal(t, 39, summary.MonthlyActiveUserCount)
+	require.Equal(t, 42.86, summary.DailyAdoptionRate)
+	require.Equal(t, 12, summary.ChatDailyActiveUserCount)
+	require.Equal(t, 8, summary.ClaudeCodeDailyActiveUserCount)
+	require.Equal(t, 2, summary.CoworkDailyActiveUserCount)
 	require.JSONEq(t, string(rows[0]), summary.RawJson)
 }
 
@@ -464,11 +468,19 @@ func TestPhase11BuildUsageReportFromSyntheticFixture(t *testing.T) {
 	require.Equal(t, "developer@example.invalid", usage.UserEmail)
 	require.Equal(t, "claude_code", usage.Product)
 	require.Equal(t, "claude-sonnet-4", usage.Model)
-	require.Equal(t, int64(12345), usage.InputTokens)
+	require.NotEmpty(t, usage.ReportId)
+	require.Equal(t, false, usage.DeletedActor)
+	require.Equal(t, "0-200k", usage.ContextWindow)
+	require.Equal(t, "global", usage.InferenceGeo)
+	require.Equal(t, "standard", usage.Speed)
+	require.Equal(t, int64(12345), usage.UncachedInputTokens)
 	require.Equal(t, int64(6789), usage.OutputTokens)
-	require.Equal(t, int64(111), usage.CacheReadTokens)
-	require.Equal(t, int64(222), usage.CacheCreationTokens)
+	require.Equal(t, int64(111), usage.CacheReadInputTokens)
+	require.Equal(t, int64(222), usage.CacheCreation1hInputTokens)
+	require.Equal(t, int64(333), usage.CacheCreation5mInputTokens)
+	require.Equal(t, int64(13456), usage.TotalTokens)
 	require.Equal(t, int64(9), usage.RequestCount)
+	require.Equal(t, int64(2), usage.WebSearchRequests)
 	require.JSONEq(t, string(rows[0]), usage.RawJson)
 }
 
@@ -493,10 +505,17 @@ func TestPhase11BuildCostReportKeepsDecimalAmountsAsStrings(t *testing.T) {
 	require.Equal(t, "developer@example.invalid", cost.UserEmail)
 	require.Equal(t, "claude_code", cost.Product)
 	require.Equal(t, "claude-sonnet-4", cost.Model)
+	require.NotEmpty(t, cost.ReportId)
+	require.Equal(t, false, cost.DeletedActor)
+	require.Equal(t, "0-200k", cost.ContextWindow)
+	require.Equal(t, "global", cost.InferenceGeo)
+	require.Equal(t, "standard", cost.Speed)
 	require.Equal(t, "tokens", cost.CostType)
+	require.Equal(t, "input", cost.TokenType)
 	require.Equal(t, "USD", cost.Currency)
 	require.Equal(t, "123.4567", cost.Amount)
 	require.Equal(t, "150.0000", cost.ListAmount)
+	require.Equal(t, int64(9), cost.RequestCount)
 	require.JSONEq(t, string(rows[0]), cost.RawJson)
 }
 
@@ -587,7 +606,7 @@ func TestPhase9UnsupportedUserActivityProductsRemainToolOnly(t *testing.T) {
 	activity, err := BuildUserActivity(didgen.NewDomainIdGenerator(&models.ClaudeEnterpriseAnalyticsRecord{}), "", record)
 	require.NoError(t, err)
 	require.Nil(t, activity)
-	require.Equal(t, "cowork", record.Product)
+	require.Empty(t, record.Product)
 	require.JSONEq(t, string(rows[0]), record.RawJson)
 }
 

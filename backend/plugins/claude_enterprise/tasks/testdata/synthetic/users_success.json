@@ -5,27 +5,49 @@
       "grain": "daily",
       "user": {
         "id": "user_synthetic_001",
-        "email": "developer@example.invalid"
+        "email_address": "developer@example.invalid"
       },
-      "product": "claude_code",
-      "num_sessions": 4,
-      "lines_added": 120,
-      "lines_removed": 40,
-      "commits_created": 2,
-      "prs_created": 1,
-      "tool_actions": 25,
-      "tool_acceptances": 20
+      "claude_code_metrics": {
+        "core_metrics": {
+          "commit_count": 2,
+          "distinct_session_count": 4,
+          "lines_of_code": {
+            "added_count": 120,
+            "removed_count": 40
+          },
+          "pull_request_count": 1
+        },
+        "tool_actions": {
+          "edit_tool": {
+            "accepted_count": 8,
+            "rejected_count": 2
+          },
+          "multi_edit_tool": {
+            "accepted_count": 6,
+            "rejected_count": 1
+          },
+          "notebook_edit_tool": {
+            "accepted_count": 3,
+            "rejected_count": 1
+          },
+          "write_tool": {
+            "accepted_count": 3,
+            "rejected_count": 1
+          }
+        }
+      }
     },
     {
       "date": "2026-01-05",
       "grain": "daily",
       "user": {
         "id": "user_synthetic_002",
-        "email": "analyst@example.invalid"
+        "email_address": "analyst@example.invalid"
       },
-      "product": "chat",
-      "messages": 33,
-      "conversations": 7
+      "chat_metrics": {
+        "distinct_conversation_count": 7,
+        "message_count": 33
+      }
     }
   ],
   "next_page": "cursor_synthetic_users_2"

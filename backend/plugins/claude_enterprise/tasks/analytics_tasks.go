@@ -447,10 +447,10 @@ func BuildAnalyticsRecord(raw []byte, params analyticsRawParams) (*models.Claude
 		Endpoint:       params.Endpoint,
 		Date:           firstNonEmpty(params.RequestDate, firstString(item, "date", "starting_date", "starting_at", "start_date", "day")),
 		Grain:          firstString(item, "grain", "period", "granularity"),
-		UserId:         firstString(item, "user_id", "userId", "user.id", "actor.user_id"),
-		UserEmail:      firstString(item, "email", "user_email", "userEmail", "user.email_address", "actor.email"),
-		Product:        firstString(item, "product", "product_type", "source"),
-		Model:          firstString(item, "model", "model_name"),
+		UserId:         firstString(item, "user.id", "actor.user_id"),
+		UserEmail:      firstString(item, "user.email_address", "actor.email"),
+		Product:        firstString(item, "product"),
+		Model:          firstString(item, "model"),
 		RawJson:        string(raw),
 	}
 	record.RecordId = analyticsRecordId(record)
@@ -465,25 +465,37 @@ func BuildSummaryRecord(raw []byte, params analyticsRawParams) (*models.ClaudeEn
 		return nil, errors.Default.Wrap(err, "failed to parse Claude Enterprise summary item")
 	}
 
-	date := firstNonEmpty(params.RequestDate, firstString(item, "date", "starting_date", "day", "starting_at"))
+	date := firstNonEmpty(params.RequestDate, firstString(item, "date", "starting_date", "day"), datePart(firstString(item, "starting_at")))
 	if date == "" {
 		return nil, errors.BadInput.New("Claude Enterprise summary item is missing date")
 	}
 
 	return &models.ClaudeEnterpriseSummary{
-		ConnectionId:       params.ConnectionId,
-		ScopeId:            params.ScopeId,
-		OrganizationId:     params.OrganizationId,
-		Date:               date,
-		Grain:              firstString(item, "grain", "period", "granularity"),
-		StartingAt:         firstString(item, "starting_at"),
-		EndingAt:           firstString(item, "ending_at"),
-		AssignedSeats:      firstInt(item, "assigned_seat_count"),
-		PendingInvites:     firstInt(item, "pending_invite_count"),
-		DailyActiveUsers:   firstInt(item, "daily_active_user_count"),
-		WeeklyActiveUsers:  firstInt(item, "weekly_active_user_count"),
-		MonthlyActiveUsers: firstInt(item, "monthly_active_user_count"),
-		RawJson:            string(raw),
+		ConnectionId:                     params.ConnectionId,
+		ScopeId:                          params.ScopeId,
+		OrganizationId:                   params.OrganizationId,
+		Date:                             date,
+		Grain:                            firstString(item, "grain", "period", "granularity"),
+		StartingAt:                       firstString(item, "starting_at"),
+		EndingAt:                         firstString(item, "ending_at"),
+		AssignedSeatCount:                firstInt(item, "assigned_seat_count"),
+		PendingInviteCount:               firstInt(item, "pending_invite_count"),
+		DailyActiveUserCount:             firstInt(item, "daily_active_user_count"),
+		WeeklyActiveUserCount:            firstInt(item, "weekly_active_user_count"),
+		MonthlyActiveUserCount:           firstInt(item, "monthly_active_user_count"),
+		DailyAdoptionRate:                firstFloat64(item, "daily_adoption_rate"),
+		WeeklyAdoptionRate:               firstFloat64(item, "weekly_adoption_rate"),
+		MonthlyAdoptionRate:              firstFloat64(item, "monthly_adoption_rate"),
+		ChatDailyActiveUserCount:         firstInt(item, "chat_daily_active_user_count"),
+		ChatWeeklyActiveUserCount:        firstInt(item, "chat_weekly_active_user_count"),
+		ChatMonthlyActiveUserCount:       firstInt(item, "chat_monthly_active_user_count"),
+		ClaudeCodeDailyActiveUserCount:   firstInt(item, "claude_code_daily_active_user_count"),
+		ClaudeCodeWeeklyActiveUserCount:  firstInt(item, "claude_code_weekly_active_user_count"),
+		ClaudeCodeMonthlyActiveUserCount: firstInt(item, "claude_code_monthly_active_user_count"),
+		CoworkDailyActiveUserCount:       firstInt(item, "cowork_daily_active_user_count"),
+		CoworkWeeklyActiveUserCount:      firstInt(item, "cowork_weekly_active_user_count"),
+		CoworkMonthlyActiveUserCount:     firstInt(item, "cowork_monthly_active_user_count"),
+		RawJson:                          string(raw),
 	}, nil
 }
 
@@ -500,31 +512,33 @@ func BuildUsageReport(raw []byte, params analyticsRawParams) (*models.ClaudeEnte
 		return nil, errors.BadInput.New("Claude Enterprise usage report item is missing starting_at")
 	}
 
-	return &models.ClaudeEnterpriseUsageReport{
-		ConnectionId:          params.ConnectionId,
-		ScopeId:               params.ScopeId,
-		OrganizationId:        effectiveItemOrganizationId(item, params),
-		StartingAt:            startingAt,
-		EndingAt:              firstString(item, "ending_at"),
-		UserId:                firstString(item, "actor.user_id"),
-		UserEmail:             firstString(item, "actor.email"),
-		DeletedActor:          firstBool(item, "actor.deleted"),
-		Product:               firstString(item, "product", "product_type", "source"),
-		Model:                 firstString(item, "model", "model_name"),
-		DataRefreshedAt:       firstString(item, "data_refreshed_at", "dataRefreshedAt"),
-		ContextWindow:         firstString(item, "context_window"),
-		InferenceGeo:          firstString(item, "inference_geo"),
-		Speed:                 firstString(item, "speed"),
-		InputTokens:           firstInt64(item, "uncached_input_tokens"),
-		OutputTokens:          firstInt64(item, "output_tokens", "outputTokens"),
-		CacheReadTokens:       firstInt64(item, "cache_read_tokens", "cacheReadTokens"),
-		CacheCreation1hTokens: firstInt64(item, "cache_creation.ephemeral_1h_input_tokens"),
-		CacheCreation5mTokens: firstInt64(item, "cache_creation.ephemeral_5m_input_tokens"),
-		TotalTokens:           firstInt64(item, "total_tokens"),
-		RequestCount:          firstInt64(item, "requests"),
-		WebSearchRequests:     firstInt64(item, "server_tool_use.web_search_requests"),
-		RawJson:               string(raw),
-	}, nil
+	report := &models.ClaudeEnterpriseUsageReport{
+		ConnectionId:               params.ConnectionId,
+		ScopeId:                    params.ScopeId,
+		OrganizationId:             effectiveItemOrganizationId(item, params),
+		StartingAt:                 startingAt,
+		EndingAt:                   firstString(item, "ending_at"),
+		UserId:                     firstString(item, "actor.user_id"),
+		UserEmail:                  firstString(item, "actor.email"),
+		DeletedActor:               firstBool(item, "actor.deleted"),
+		Product:                    firstString(item, "product"),
+		Model:                      firstString(item, "model"),
+		DataRefreshedAt:            firstString(item, "data_refreshed_at"),
+		ContextWindow:              firstString(item, "context_window"),
+		InferenceGeo:               firstString(item, "inference_geo"),
+		Speed:                      firstString(item, "speed"),
+		UncachedInputTokens:        firstInt64(item, "uncached_input_tokens"),
+		OutputTokens:               firstInt64(item, "output_tokens", "outputTokens"),
+		CacheReadInputTokens:       firstInt64(item, "cache_read_input_tokens"),
+		CacheCreation1hInputTokens: firstInt64(item, "cache_creation.ephemeral_1h_input_tokens"),
+		CacheCreation5mInputTokens: firstInt64(item, "cache_creation.ephemeral_5m_input_tokens"),
+		TotalTokens:                firstInt64(item, "total_tokens"),
+		RequestCount:               firstInt64(item, "requests"),
+		WebSearchRequests:          firstInt64(item, "server_tool_use.web_search_requests"),
+		RawJson:                    string(raw),
+	}
+	report.ReportId = usageReportId(report)
+	return report, nil
 }
 
 // BuildCostReport extracts a dashboard-ready per-user cost row. Monetary
@@ -540,7 +554,7 @@ func BuildCostReport(raw []byte, params analyticsRawParams) (*models.ClaudeEnter
 		return nil, errors.BadInput.New("Claude Enterprise cost report item is missing starting_at")
 	}
 
-	return &models.ClaudeEnterpriseCostReport{
+	report := &models.ClaudeEnterpriseCostReport{
 		ConnectionId:    params.ConnectionId,
 		ScopeId:         params.ScopeId,
 		OrganizationId:  effectiveItemOrganizationId(item, params),
@@ -549,20 +563,22 @@ func BuildCostReport(raw []byte, params analyticsRawParams) (*models.ClaudeEnter
 		UserId:          firstString(item, "actor.user_id"),
 		UserEmail:       firstString(item, "actor.email"),
 		DeletedActor:    firstBool(item, "actor.deleted"),
-		Product:         firstString(item, "product", "product_type", "source"),
-		Model:           firstString(item, "model", "model_name"),
+		Product:         firstString(item, "product"),
+		Model:           firstString(item, "model"),
 		ContextWindow:   firstString(item, "context_window"),
 		InferenceGeo:    firstString(item, "inference_geo"),
 		Speed:           firstString(item, "speed"),
-		CostType:        firstString(item, "cost_type", "costType"),
+		CostType:        firstString(item, "cost_type"),
 		TokenType:       firstString(item, "token_type"),
 		Currency:        firstString(item, "currency"),
-		DataRefreshedAt: firstString(item, "data_refreshed_at", "dataRefreshedAt"),
+		DataRefreshedAt: firstString(item, "data_refreshed_at"),
 		Amount:          firstDecimalString(item, "amount"),
-		ListAmount:      firstDecimalString(item, "list_amount", "listAmount"),
+		ListAmount:      firstDecimalString(item, "list_amount"),
 		RequestCount:    firstInt64(item, "requests"),
 		RawJson:         string(raw),
-	}, nil
+	}
+	report.ReportId = costReportId(report)
+	return report, nil
 }
 
 type analyticsResponseEnvelope struct {
@@ -700,6 +716,32 @@ func firstInt64(item map[string]interface{}, paths ...string) int64 {
 	return 0
 }
 
+func firstFloat64(item map[string]interface{}, paths ...string) float64 {
+	for _, path := range paths {
+		if value, ok := lookupPath(item, strings.Split(path, ".")); ok {
+			switch typed := value.(type) {
+			case float64:
+				return typed
+			case int:
+				return float64(typed)
+			case int64:
+				return float64(typed)
+			case json.Number:
+				parsed, err := typed.Float64()
+				if err == nil {
+					return parsed
+				}
+			case string:
+				parsed, err := strconv.ParseFloat(typed, 64)
+				if err == nil {
+					return parsed
+				}
+			}
+		}
+	}
+	return 0
+}
+
 func firstBool(item map[string]interface{}, paths ...string) bool {
 	for _, path := range paths {
 		if value, ok := lookupPath(item, strings.Split(path, ".")); ok {
@@ -777,6 +819,48 @@ func analyticsRecordId(record *models.ClaudeEnterpriseAnalyticsRecord) string {
 	}
 	sum := sha256.Sum256([]byte(strings.Join(stableParts, "\x00")))
 	return hex.EncodeToString(sum[:])
+}
+
+func usageReportId(report *models.ClaudeEnterpriseUsageReport) string {
+	stableParts := []string{
+		report.OrganizationId,
+		report.StartingAt,
+		report.EndingAt,
+		report.UserId,
+		report.Product,
+		report.Model,
+		report.ContextWindow,
+		report.InferenceGeo,
+		report.Speed,
+	}
+	sum := sha256.Sum256([]byte(strings.Join(stableParts, "\x00")))
+	return hex.EncodeToString(sum[:])
+}
+
+func costReportId(report *models.ClaudeEnterpriseCostReport) string {
+	stableParts := []string{
+		report.OrganizationId,
+		report.StartingAt,
+		report.EndingAt,
+		report.UserId,
+		report.Product,
+		report.Model,
+		report.ContextWindow,
+		report.InferenceGeo,
+		report.Speed,
+		report.CostType,
+		report.TokenType,
+		report.Currency,
+	}
+	sum := sha256.Sum256([]byte(strings.Join(stableParts, "\x00")))
+	return hex.EncodeToString(sum[:])
+}
+
+func datePart(value string) string {
+	if len(value) >= len("2006-01-02") {
+		return value[:len("2006-01-02")]
+	}
+	return value
 }
 
 func resolveDateRange(options *ClaudeEnterpriseOptions) (string, string) {

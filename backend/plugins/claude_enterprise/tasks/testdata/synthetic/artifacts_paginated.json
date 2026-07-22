@@ -3,15 +3,11 @@
     {
       "date": "2026-01-06",
       "grain": "daily",
-      "artifact_id": "artifact_synthetic_003",
-      "artifact_title": "Release Notes Template",
-      "artifact_type": "document",
-      "creator": {
-        "id": "user_synthetic_003",
-        "email": "reviewer@example.invalid"
-      },
-      "view_count": 5,
-      "share_count": 0
+      "artifact_type": "text/markdown",
+      "is_shared": false,
+      "artifacts_created_count": 5,
+      "published_artifacts_created_count": 0,
+      "distinct_user_count": 1
     }
   ],
   "next_page": null

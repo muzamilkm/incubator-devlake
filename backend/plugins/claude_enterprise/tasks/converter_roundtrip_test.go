@@ -82,8 +82,7 @@ func TestConvertUserActivitiesEntryPointConvertsSupportedProduct(t *testing.T) {
 		RecordId:       "record_synthetic_001",
 		Date:           "2026-01-05",
 		UserEmail:      "dev@example.invalid",
-		Product:        "claude_code",
-		RawJson:        `{"date":"2026-01-05","user":{"id":"user_synthetic_001","email":"dev@example.invalid"},"product":"claude_code","num_sessions":4}`,
+		RawJson:        `{"date":"2026-01-05","user":{"id":"user_synthetic_001","email_address":"dev@example.invalid"},"claude_code_metrics":{"core_metrics":{"distinct_session_count":4}}}`,
 	}
 	ctx, mockDal := newSingleRowConvertSubTaskContext(validClaudeEnterpriseTaskData(), record)
 
@@ -107,8 +106,7 @@ func TestConvertUserActivitiesEntryPointPropagatesAccountResolutionError(t *test
 		RecordId:       "record_synthetic_003",
 		Date:           "2026-01-05",
 		UserEmail:      "dev@example.invalid",
-		Product:        "claude_code",
-		RawJson:        `{"date":"2026-01-05","user":{"id":"user_synthetic_001","email":"dev@example.invalid"},"product":"claude_code","num_sessions":4}`,
+		RawJson:        `{"date":"2026-01-05","user":{"id":"user_synthetic_001","email_address":"dev@example.invalid"},"claude_code_metrics":{"core_metrics":{"distinct_session_count":4}}}`,
 	}
 	mockRows := new(mockdal.Rows)
 	mockRows.On("Next").Return(true).Once()
@@ -154,8 +152,7 @@ func TestConvertUserActivitiesEntryPointSkipsUnsupportedProduct(t *testing.T) {
 		RecordId:       "record_synthetic_002",
 		Date:           "2026-01-05",
 		UserEmail:      "reviewer@example.invalid",
-		Product:        "cowork",
-		RawJson:        `{"date":"2026-01-05","user":{"id":"user_synthetic_003","email":"reviewer@example.invalid"},"product":"cowork","messages":12}`,
+		RawJson:        `{"date":"2026-01-05","user":{"id":"user_synthetic_003","email_address":"reviewer@example.invalid"},"cowork_metrics":{"distinct_session_count":2,"message_count":12}}`,
 	}
 	ctx, mockDal := newSingleRowConvertSubTaskContext(validClaudeEnterpriseTaskData(), record)
 

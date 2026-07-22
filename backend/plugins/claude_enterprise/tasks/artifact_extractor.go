@@ -65,12 +65,6 @@ func BuildArtifactRecord(raw []byte, params analyticsRawParams) (*models.ClaudeE
 		ArtifactsCreatedCount:          firstInt64(item, "artifacts_created_count"),
 		PublishedArtifactsCreatedCount: firstInt64(item, "published_artifacts_created_count"),
 		DistinctUserCount:              firstInt64(item, "distinct_user_count"),
-		ArtifactId:                     firstString(item, "artifact_id"),
-		ArtifactTitle:                  firstString(item, "artifact_title"),
-		CreatorUserId:                  firstString(item, "creator_id"),
-		CreatorEmail:                   firstString(item, "creator_email"),
-		ViewCount:                      firstInt64(item, "view_count"),
-		ShareCount:                     firstInt64(item, "share_count"),
 		RawJson:                        string(raw),
 	}, nil
 }

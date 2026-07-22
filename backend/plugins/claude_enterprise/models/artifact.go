@@ -42,12 +42,6 @@ type ClaudeEnterpriseArtifact struct {
 	ArtifactsCreatedCount          int64  `json:"artifactsCreatedCount"`
 	PublishedArtifactsCreatedCount int64  `json:"publishedArtifactsCreatedCount"`
 	DistinctUserCount              int64  `json:"distinctUserCount"`
-	ArtifactId                     string `gorm:"-" json:"-"`
-	ArtifactTitle                  string `gorm:"-" json:"-"`
-	CreatorUserId                  string `gorm:"-" json:"-"`
-	CreatorEmail                   string `gorm:"-" json:"-"`
-	ViewCount                      int64  `gorm:"-" json:"-"`
-	ShareCount                     int64  `gorm:"-" json:"-"`
 
 	RawJson string `json:"rawJson" gorm:"type:longtext"`
 }

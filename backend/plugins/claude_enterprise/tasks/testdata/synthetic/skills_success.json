@@ -3,28 +3,48 @@
     {
       "date": "2026-01-05",
       "grain": "daily",
-      "skill_id": "skill_synthetic_001",
       "skill_name": "Code Review Assistant",
-      "skill_type": "custom",
-      "creator": {
-        "id": "user_synthetic_001",
-        "email": "developer@example.invalid"
+      "skill_display_name": "Code Review Assistant",
+      "distinct_user_count": 6,
+      "invocation_count": 42,
+      "enable_count": 4,
+      "attributed_list_price": "12.3400",
+      "estimated_overage_spend": "1.2300",
+      "currency": "USD",
+      "share_status": "organization",
+      "chat_metrics": {
+        "distinct_conversation_skill_used_count": 20
       },
-      "active_users": 6,
-      "usage_count": 42
+      "claude_code_metrics": {
+        "distinct_session_skill_used_count": 11
+      },
+      "cowork_metrics": {
+        "distinct_session_skill_used_count": 3
+      },
+      "user_id": "user_synthetic_001"
     },
     {
       "date": "2026-01-05",
       "grain": "daily",
-      "skill_id": "skill_synthetic_002",
       "skill_name": "Spreadsheet Formulas",
-      "skill_type": "built_in",
-      "creator": {
-        "id": "user_synthetic_002",
-        "email": "analyst@example.invalid"
+      "skill_display_name": "Spreadsheet Formulas",
+      "distinct_user_count": 11,
+      "invocation_count": 89,
+      "enable_count": 7,
+      "attributed_list_price": "23.4500",
+      "estimated_overage_spend": "2.3400",
+      "currency": "USD",
+      "share_status": "public",
+      "chat_metrics": {
+        "distinct_conversation_skill_used_count": 50
       },
-      "active_users": 11,
-      "usage_count": 89
+      "claude_code_metrics": {
+        "distinct_session_skill_used_count": 14
+      },
+      "cowork_metrics": {
+        "distinct_session_skill_used_count": 4
+      },
+      "user_id": "user_synthetic_002"
     }
   ],
   "next_page": "cursor_synthetic_skills_2"

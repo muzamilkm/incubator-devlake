@@ -82,16 +82,13 @@ func BuildUserActivities(
 		return nil, errors.BadInput.Wrap(err, "invalid Claude Enterprise user activity date")
 	}
 
-	userEmail := firstNonEmpty(record.UserEmail, firstString(item, "user.email_address", "email", "user_email"))
+	userEmail := firstNonEmpty(record.UserEmail, firstString(item, "user.email_address"))
 	activities := make([]*ai.AiActivity, 0, 2)
 	if userActivityHasChatMetrics(item) {
 		activities = append(activities, buildUserActivity(idGen, accountId, record, date, userEmail, "chat", item))
 	}
 	if userActivityHasClaudeCodeMetrics(item) {
 		activities = append(activities, buildUserActivity(idGen, accountId, record, date, userEmail, "claude_code", item))
-	}
-	if len(activities) == 0 && record.Product != "" {
-		activities = append(activities, buildUserActivity(idGen, accountId, record, date, userEmail, strings.ToLower(record.Product), item))
 	}
 	return activities, nil
 }
@@ -114,10 +111,10 @@ func buildUserActivity(idGen *didgen.DomainIdGenerator, accountId string, record
 	if product == "claude_code" {
 		activity.SuggestionsCount = userActivityToolActionCount(item, "rejected_count")
 		activity.AcceptanceCount = userActivityToolActionCount(item, "accepted_count")
-		activity.LinesAdded = intValue(item, "claude_code_metrics.core_metrics.lines_of_code.added_count", "lines_added")
-		activity.LinesRemoved = intValue(item, "claude_code_metrics.core_metrics.lines_of_code.removed_count", "lines_removed")
-		activity.CommitsCreated = intValue(item, "claude_code_metrics.core_metrics.commit_count", "commits_created")
-		activity.PrsCreated = intValue(item, "claude_code_metrics.core_metrics.pull_request_count", "prs_created")
+		activity.LinesAdded = intValue(item, "claude_code_metrics.core_metrics.lines_of_code.added_count")
+		activity.LinesRemoved = intValue(item, "claude_code_metrics.core_metrics.lines_of_code.removed_count")
+		activity.CommitsCreated = intValue(item, "claude_code_metrics.core_metrics.commit_count")
+		activity.PrsCreated = intValue(item, "claude_code_metrics.core_metrics.pull_request_count")
 	}
 	return activity
 }
@@ -191,7 +188,7 @@ func userActivitySessions(product string, item map[string]interface{}) int {
 	if product == "chat" || product == "claude_chat" || product == "claude-chat" {
 		return intValue(item, "chat_metrics.distinct_conversation_count")
 	}
-	return intValue(item, "claude_code_metrics.core_metrics.distinct_session_count", "num_sessions", "sessions")
+	return intValue(item, "claude_code_metrics.core_metrics.distinct_session_count")
 }
 
 func userActivityHasChatMetrics(item map[string]interface{}) bool {

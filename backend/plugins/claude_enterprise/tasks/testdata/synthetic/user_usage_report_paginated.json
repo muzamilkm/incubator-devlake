@@ -5,17 +5,28 @@
       "ending_at": "2026-01-07T00:00:00Z",
       "data_refreshed_at": "2026-01-07T04:00:00Z",
       "organization_id": "org_synthetic_001",
-      "user": {
-        "id": "user_synthetic_002",
-        "email": "analyst@example.invalid"
+      "actor": {
+        "user_id": "user_synthetic_002",
+        "email": "analyst@example.invalid",
+        "deleted": false
       },
       "product": "chat",
       "model": "claude-opus-4",
-      "input_tokens": 23456,
+      "context_window": "0-200k",
+      "inference_geo": "global",
+      "speed": "standard",
+      "uncached_input_tokens": 23456,
       "output_tokens": 7890,
-      "cache_read_tokens": 333,
-      "cache_creation_tokens": 444,
-      "request_count": 11
+      "cache_read_input_tokens": 333,
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 444,
+        "ephemeral_5m_input_tokens": 555
+      },
+      "total_tokens": 31789,
+      "requests": 11,
+      "server_tool_use": {
+        "web_search_requests": 1
+      }
     }
   ],
   "next_page": null

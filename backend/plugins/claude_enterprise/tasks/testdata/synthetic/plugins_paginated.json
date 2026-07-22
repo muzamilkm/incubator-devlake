@@ -5,10 +5,15 @@
       "grain": "daily",
       "plugin_id": "plugin_synthetic_003",
       "plugin_name": "PagerDuty Alerts",
-      "plugin_type": "integration",
-      "publisher": "Example Publisher",
-      "active_users": 2,
-      "install_count": 4
+      "distinct_user_count": 2,
+      "install_count": 4,
+      "invocation_count": 8,
+      "claude_code_metrics": {
+        "distinct_session_plugin_used_count": 5
+      },
+      "cowork_metrics": {
+        "distinct_session_plugin_used_count": 1
+      }
     }
   ],
   "next_page": null

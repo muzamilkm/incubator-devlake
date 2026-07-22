@@ -72,12 +72,6 @@ func BuildSkillRecord(raw []byte, params analyticsRawParams) (*models.ClaudeEnte
 		ChatDistinctConversationSkillUsedCount:  firstInt64(item, "chat_metrics.distinct_conversation_skill_used_count"),
 		ClaudeCodeDistinctSessionSkillUsedCount: firstInt64(item, "claude_code_metrics.distinct_session_skill_used_count"),
 		CoworkDistinctSessionSkillUsedCount:     firstInt64(item, "cowork_metrics.distinct_session_skill_used_count"),
-		SkillId:                                 firstString(item, "skill_id"),
-		SkillType:                               firstString(item, "skill_type"),
-		CreatorUserId:                           firstString(item, "creator_id"),
-		CreatorEmail:                            firstString(item, "creator_email"),
-		ActiveUsers:                             firstInt(item, "active_users"),
-		UsageCount:                              firstInt64(item, "usage_count"),
 		RawJson:                                 string(raw),
 	}, nil
 }

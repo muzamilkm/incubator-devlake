@@ -68,9 +68,6 @@ func BuildPluginAdoptionRecord(raw []byte, params analyticsRawParams) (*models.C
 		InvocationCount:                          firstInt64(item, "invocation_count"),
 		ClaudeCodeDistinctSessionPluginUsedCount: firstInt64(item, "claude_code_metrics.distinct_session_plugin_used_count"),
 		CoworkDistinctSessionPluginUsedCount:     firstInt64(item, "cowork_metrics.distinct_session_plugin_used_count"),
-		PluginType:                               firstString(item, "plugin_type"),
-		Publisher:                                firstString(item, "publisher"),
-		ActiveUsers:                              firstInt(item, "active_users"),
 		RawJson:                                  string(raw),
 	}, nil
 }

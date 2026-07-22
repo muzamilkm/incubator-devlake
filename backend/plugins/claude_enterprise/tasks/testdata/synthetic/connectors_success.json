@@ -3,22 +3,38 @@
     {
       "date": "2026-01-05",
       "grain": "daily",
-      "connector_id": "connector_synthetic_001",
       "connector_name": "Google Drive",
-      "connector_type": "mcp",
-      "status": "active",
-      "active_users": 9,
-      "usage_count": 54
+      "distinct_user_count": 9,
+      "read_call_count": 44,
+      "write_call_count": 7,
+      "unclassified_call_count": 3,
+      "chat_metrics": {
+        "distinct_conversation_connector_used_count": 33
+      },
+      "claude_code_metrics": {
+        "distinct_session_connector_used_count": 18
+      },
+      "cowork_metrics": {
+        "distinct_session_connector_used_count": 5
+      }
     },
     {
       "date": "2026-01-05",
       "grain": "daily",
-      "connector_id": "connector_synthetic_002",
       "connector_name": "Jira",
-      "connector_type": "mcp",
-      "status": "active",
-      "active_users": 4,
-      "usage_count": 21
+      "distinct_user_count": 4,
+      "read_call_count": 16,
+      "write_call_count": 3,
+      "unclassified_call_count": 2,
+      "chat_metrics": {
+        "distinct_conversation_connector_used_count": 12
+      },
+      "claude_code_metrics": {
+        "distinct_session_connector_used_count": 7
+      },
+      "cowork_metrics": {
+        "distinct_session_connector_used_count": 2
+      }
     }
   ],
   "next_page": "cursor_synthetic_connectors_2"

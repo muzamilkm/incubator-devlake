@@ -43,19 +43,31 @@ func (script *addClaudeEnterpriseSummaries) Name() string {
 
 type claudeSummary20260713 struct {
 	archived.NoPKModel
-	ConnectionId       uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId            string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId     string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
-	Date               string `gorm:"primaryKey;type:varchar(32)" json:"date"`
-	Grain              string `gorm:"type:varchar(32)" json:"grain"`
-	StartingAt         string `gorm:"type:varchar(64)" json:"startingAt"`
-	EndingAt           string `gorm:"type:varchar(64)" json:"endingAt"`
-	AssignedSeats      int    `json:"assignedSeats"`
-	PendingInvites     int    `json:"pendingInvites"`
-	DailyActiveUsers   int    `json:"dailyActiveUsers"`
-	WeeklyActiveUsers  int    `json:"weeklyActiveUsers"`
-	MonthlyActiveUsers int    `json:"monthlyActiveUsers"`
-	RawJson            string `gorm:"type:longtext" json:"rawJson"`
+	ConnectionId                     uint64  `gorm:"primaryKey" json:"connectionId"`
+	ScopeId                          string  `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
+	OrganizationId                   string  `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	Date                             string  `gorm:"primaryKey;type:varchar(32)" json:"date"`
+	Grain                            string  `gorm:"type:varchar(32)" json:"grain"`
+	StartingAt                       string  `gorm:"type:varchar(64)" json:"startingAt"`
+	EndingAt                         string  `gorm:"type:varchar(64)" json:"endingAt"`
+	AssignedSeatCount                int     `json:"assignedSeatCount"`
+	PendingInviteCount               int     `json:"pendingInviteCount"`
+	DailyActiveUserCount             int     `json:"dailyActiveUserCount"`
+	WeeklyActiveUserCount            int     `json:"weeklyActiveUserCount"`
+	MonthlyActiveUserCount           int     `json:"monthlyActiveUserCount"`
+	DailyAdoptionRate                float64 `json:"dailyAdoptionRate"`
+	WeeklyAdoptionRate               float64 `json:"weeklyAdoptionRate"`
+	MonthlyAdoptionRate              float64 `json:"monthlyAdoptionRate"`
+	ChatDailyActiveUserCount         int     `json:"chatDailyActiveUserCount"`
+	ChatWeeklyActiveUserCount        int     `json:"chatWeeklyActiveUserCount"`
+	ChatMonthlyActiveUserCount       int     `json:"chatMonthlyActiveUserCount"`
+	ClaudeCodeDailyActiveUserCount   int     `json:"claudeCodeDailyActiveUserCount"`
+	ClaudeCodeWeeklyActiveUserCount  int     `json:"claudeCodeWeeklyActiveUserCount"`
+	ClaudeCodeMonthlyActiveUserCount int     `json:"claudeCodeMonthlyActiveUserCount"`
+	CoworkDailyActiveUserCount       int     `json:"coworkDailyActiveUserCount"`
+	CoworkWeeklyActiveUserCount      int     `json:"coworkWeeklyActiveUserCount"`
+	CoworkMonthlyActiveUserCount     int     `json:"coworkMonthlyActiveUserCount"`
+	RawJson                          string  `gorm:"type:longtext" json:"rawJson"`
 }
 
 func (claudeSummary20260713) TableName() string {

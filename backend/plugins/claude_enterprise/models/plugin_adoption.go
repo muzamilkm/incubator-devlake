@@ -46,9 +46,6 @@ type ClaudeEnterprisePluginAdoption struct {
 	InvocationCount                          int64  `json:"invocationCount"`
 	ClaudeCodeDistinctSessionPluginUsedCount int64  `json:"claudeCodeDistinctSessionPluginUsedCount"`
 	CoworkDistinctSessionPluginUsedCount     int64  `json:"coworkDistinctSessionPluginUsedCount"`
-	PluginType                               string `gorm:"-" json:"-"`
-	Publisher                                string `gorm:"-" json:"-"`
-	ActiveUsers                              int    `gorm:"-" json:"-"`
 
 	RawJson string `json:"rawJson" gorm:"type:longtext"`
 }

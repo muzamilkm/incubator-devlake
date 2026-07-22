@@ -46,8 +46,6 @@ type ClaudeEnterpriseChatProject struct {
 	DistinctUserCount         int64  `json:"distinctUserCount"`
 	DistinctConversationCount int64  `json:"distinctConversationCount"`
 	MessageCount              int64  `json:"messageCount"`
-	MembersCount              int    `gorm:"-" json:"-"`
-	ConversationsCount        int64  `gorm:"-" json:"-"`
 
 	RawJson string `json:"rawJson" gorm:"type:longtext"`
 }
