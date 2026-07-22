@@ -31,7 +31,7 @@ var pluginsEndpoint = analyticsEndpoint{
 	RawTable:        RawPluginsTable,
 	Path:            "organizations/analytics/plugins",
 	Description:     "Claude Enterprise plugin adoption",
-	DateStyle:       dateParamStartingDate,
+	DateStyle:       dateParamDate,
 	Paginated:       true,
 	DailyIterated:   true,
 	ExtraToolTables: []string{"_tool_claude_enterprise_plugins"},

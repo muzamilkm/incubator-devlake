@@ -35,19 +35,20 @@ import "github.com/apache/incubator-devlake/core/models/common"
 type ClaudeEnterprisePluginAdoption struct {
 	common.NoPKModel
 
-	ConnectionId   uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId        string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
-	Date           string `gorm:"primaryKey;type:varchar(32)" json:"date"`
-	PluginId       string `gorm:"primaryKey;type:varchar(255)" json:"pluginId"`
-
-	PluginName string `json:"pluginName" gorm:"type:varchar(255)"`
-	// PluginType and Publisher are Provisional.
-	PluginType string `json:"pluginType" gorm:"type:varchar(100)"`
-	Publisher  string `json:"publisher" gorm:"type:varchar(255)"`
-	// ActiveUsers and InstallCount are Provisional daily adoption metrics.
-	ActiveUsers  int   `json:"activeUsers"`
-	InstallCount int64 `json:"installCount"`
+	ConnectionId                             uint64 `gorm:"primaryKey" json:"connectionId"`
+	ScopeId                                  string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
+	OrganizationId                           string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	Date                                     string `gorm:"primaryKey;type:varchar(32)" json:"date"`
+	PluginId                                 string `gorm:"type:varchar(255)" json:"pluginId"`
+	PluginName                               string `gorm:"primaryKey;type:varchar(255)" json:"pluginName"`
+	DistinctUserCount                        int64  `json:"distinctUserCount"`
+	InstallCount                             int64  `json:"installCount"`
+	InvocationCount                          int64  `json:"invocationCount"`
+	ClaudeCodeDistinctSessionPluginUsedCount int64  `json:"claudeCodeDistinctSessionPluginUsedCount"`
+	CoworkDistinctSessionPluginUsedCount     int64  `json:"coworkDistinctSessionPluginUsedCount"`
+	PluginType                               string `gorm:"-" json:"-"`
+	Publisher                                string `gorm:"-" json:"-"`
+	ActiveUsers                              int    `gorm:"-" json:"-"`
 
 	RawJson string `json:"rawJson" gorm:"type:longtext"`
 }

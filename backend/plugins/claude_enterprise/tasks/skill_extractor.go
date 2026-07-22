@@ -46,27 +46,38 @@ func BuildSkillRecord(raw []byte, params analyticsRawParams) (*models.ClaudeEnte
 		return nil, errors.Default.Wrap(err, "failed to parse Claude Enterprise skill item")
 	}
 
-	date := firstString(item, "date", "starting_date", "day")
+	date := firstNonEmpty(params.RequestDate, firstString(item, "date", "starting_date", "day"))
 	if date == "" {
 		return nil, errors.BadInput.New("Claude Enterprise skill item is missing date")
 	}
-	skillId := firstString(item, "skill_id", "skillId", "id")
-	if skillId == "" {
-		return nil, errors.BadInput.New("Claude Enterprise skill item is missing skill id")
+	skillName := firstString(item, "skill_name")
+	if skillName == "" {
+		return nil, errors.BadInput.New("Claude Enterprise skill item is missing skill name")
 	}
 
 	return &models.ClaudeEnterpriseSkill{
-		ConnectionId:   params.ConnectionId,
-		ScopeId:        params.ScopeId,
-		OrganizationId: params.OrganizationId,
-		Date:           date,
-		SkillId:        skillId,
-		SkillName:      firstString(item, "skill_name", "skillName", "name"),
-		SkillType:      firstString(item, "skill_type", "skillType", "type"),
-		CreatorUserId:  firstString(item, "creator_id", "creatorId", "creator.user_id", "creator.id"),
-		CreatorEmail:   firstString(item, "creator_email", "creatorEmail", "creator.email"),
-		ActiveUsers:    firstInt(item, "active_users", "activeUsers", "users_count", "usersCount"),
-		UsageCount:     firstInt64(item, "usage_count", "usageCount", "invocations", "invocation_count"),
-		RawJson:        string(raw),
+		ConnectionId:                            params.ConnectionId,
+		ScopeId:                                 params.ScopeId,
+		OrganizationId:                          params.OrganizationId,
+		Date:                                    date,
+		SkillName:                               skillName,
+		SkillDisplayName:                        firstString(item, "skill_display_name"),
+		DistinctUserCount:                       firstInt64(item, "distinct_user_count"),
+		InvocationCount:                         firstInt64(item, "invocation_count"),
+		EnableCount:                             firstInt64(item, "enable_count"),
+		AttributedListPrice:                     firstDecimalString(item, "attributed_list_price"),
+		EstimatedOverageSpend:                   firstDecimalString(item, "estimated_overage_spend"),
+		Currency:                                firstString(item, "currency"),
+		ShareStatus:                             firstString(item, "share_status"),
+		ChatDistinctConversationSkillUsedCount:  firstInt64(item, "chat_metrics.distinct_conversation_skill_used_count"),
+		ClaudeCodeDistinctSessionSkillUsedCount: firstInt64(item, "claude_code_metrics.distinct_session_skill_used_count"),
+		CoworkDistinctSessionSkillUsedCount:     firstInt64(item, "cowork_metrics.distinct_session_skill_used_count"),
+		SkillId:                                 firstString(item, "skill_id"),
+		SkillType:                               firstString(item, "skill_type"),
+		CreatorUserId:                           firstString(item, "creator_id"),
+		CreatorEmail:                            firstString(item, "creator_email"),
+		ActiveUsers:                             firstInt(item, "active_users"),
+		UsageCount:                              firstInt64(item, "usage_count"),
+		RawJson:                                 string(raw),
 	}, nil
 }

@@ -33,7 +33,7 @@ var chatProjectsEndpoint = analyticsEndpoint{
 	RawTable:        RawChatProjectsTable,
 	Path:            "organizations/analytics/apps/chat/projects",
 	Description:     "Claude Enterprise chat project adoption",
-	DateStyle:       dateParamStartingDate,
+	DateStyle:       dateParamDate,
 	Paginated:       true,
 	DailyIterated:   true,
 	ExtraToolTables: []string{"_tool_claude_enterprise_chat_projects"},

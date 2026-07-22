@@ -39,14 +39,15 @@ type ClaudeEnterpriseChatProject struct {
 	Date           string `gorm:"primaryKey;type:varchar(32)" json:"date"`
 	ProjectId      string `gorm:"primaryKey;type:varchar(255)" json:"projectId"`
 
-	ProjectName string `json:"projectName" gorm:"type:varchar(255)"`
-	// CreatorUserId and CreatorEmail are Provisional.
-	CreatorUserId string `json:"creatorUserId" gorm:"type:varchar(255)"`
-	CreatorEmail  string `json:"creatorEmail" gorm:"type:varchar(255)"`
-	// MembersCount and ConversationsCount are Provisional daily adoption
-	// metrics.
-	MembersCount       int   `json:"membersCount"`
-	ConversationsCount int64 `json:"conversationsCount"`
+	ProjectName               string `json:"projectName" gorm:"type:varchar(255)"`
+	CreatedAt                 string `json:"createdAt" gorm:"type:varchar(64)"`
+	CreatorUserId             string `json:"creatorUserId" gorm:"type:varchar(255)"`
+	CreatorEmail              string `json:"creatorEmail" gorm:"type:varchar(255)"`
+	DistinctUserCount         int64  `json:"distinctUserCount"`
+	DistinctConversationCount int64  `json:"distinctConversationCount"`
+	MessageCount              int64  `json:"messageCount"`
+	MembersCount              int    `gorm:"-" json:"-"`
+	ConversationsCount        int64  `gorm:"-" json:"-"`
 
 	RawJson string `json:"rawJson" gorm:"type:longtext"`
 }

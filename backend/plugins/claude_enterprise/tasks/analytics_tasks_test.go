@@ -85,7 +85,7 @@ func TestPhase3ArchitectureContract(t *testing.T) {
 	}
 
 	require.Equal(t, dateParamStartingDate, summariesEndpoint.DateStyle)
-	require.Equal(t, dateParamStartingDate, userActivitiesEndpoint.DateStyle)
+	require.Equal(t, dateParamDate, userActivitiesEndpoint.DateStyle)
 	require.Equal(t, dateParamStartingAt, userUsageReportEndpoint.DateStyle)
 	require.Equal(t, dateParamStartingAt, userCostReportEndpoint.DateStyle)
 	require.False(t, summariesEndpoint.Paginated)

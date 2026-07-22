@@ -47,26 +47,30 @@ func BuildPluginAdoptionRecord(raw []byte, params analyticsRawParams) (*models.C
 		return nil, errors.Default.Wrap(err, "failed to parse Claude Enterprise plugin item")
 	}
 
-	date := firstString(item, "date", "starting_date", "day")
+	date := firstNonEmpty(params.RequestDate, firstString(item, "date", "starting_date", "day"))
 	if date == "" {
 		return nil, errors.BadInput.New("Claude Enterprise plugin item is missing date")
 	}
-	pluginId := firstString(item, "plugin_id", "pluginId", "id")
-	if pluginId == "" {
-		return nil, errors.BadInput.New("Claude Enterprise plugin item is missing plugin id")
+	pluginName := firstString(item, "plugin_name")
+	if pluginName == "" {
+		return nil, errors.BadInput.New("Claude Enterprise plugin item is missing plugin name")
 	}
 
 	return &models.ClaudeEnterprisePluginAdoption{
-		ConnectionId:   params.ConnectionId,
-		ScopeId:        params.ScopeId,
-		OrganizationId: params.OrganizationId,
-		Date:           date,
-		PluginId:       pluginId,
-		PluginName:     firstString(item, "plugin_name", "pluginName", "name"),
-		PluginType:     firstString(item, "plugin_type", "pluginType", "type"),
-		Publisher:      firstString(item, "publisher", "publisher_name", "publisherName"),
-		ActiveUsers:    firstInt(item, "active_users", "activeUsers", "users_count", "usersCount"),
-		InstallCount:   firstInt64(item, "install_count", "installCount", "installs"),
-		RawJson:        string(raw),
+		ConnectionId:                             params.ConnectionId,
+		ScopeId:                                  params.ScopeId,
+		OrganizationId:                           params.OrganizationId,
+		Date:                                     date,
+		PluginId:                                 firstString(item, "plugin_id"),
+		PluginName:                               pluginName,
+		DistinctUserCount:                        firstInt64(item, "distinct_user_count"),
+		InstallCount:                             firstInt64(item, "install_count", "installCount", "installs"),
+		InvocationCount:                          firstInt64(item, "invocation_count"),
+		ClaudeCodeDistinctSessionPluginUsedCount: firstInt64(item, "claude_code_metrics.distinct_session_plugin_used_count"),
+		CoworkDistinctSessionPluginUsedCount:     firstInt64(item, "cowork_metrics.distinct_session_plugin_used_count"),
+		PluginType:                               firstString(item, "plugin_type"),
+		Publisher:                                firstString(item, "publisher"),
+		ActiveUsers:                              firstInt(item, "active_users"),
+		RawJson:                                  string(raw),
 	}, nil
 }

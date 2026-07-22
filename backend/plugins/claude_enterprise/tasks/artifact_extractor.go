@@ -46,27 +46,31 @@ func BuildArtifactRecord(raw []byte, params analyticsRawParams) (*models.ClaudeE
 		return nil, errors.Default.Wrap(err, "failed to parse Claude Enterprise artifact item")
 	}
 
-	date := firstString(item, "date", "starting_date", "day")
+	date := firstNonEmpty(params.RequestDate, firstString(item, "date", "starting_date", "day"))
 	if date == "" {
 		return nil, errors.BadInput.New("Claude Enterprise artifact item is missing date")
 	}
-	artifactId := firstString(item, "artifact_id", "artifactId", "id")
-	if artifactId == "" {
-		return nil, errors.BadInput.New("Claude Enterprise artifact item is missing artifact id")
+	artifactType := firstString(item, "artifact_type")
+	if artifactType == "" {
+		return nil, errors.BadInput.New("Claude Enterprise artifact item is missing artifact type")
 	}
 
 	return &models.ClaudeEnterpriseArtifact{
-		ConnectionId:   params.ConnectionId,
-		ScopeId:        params.ScopeId,
-		OrganizationId: params.OrganizationId,
-		Date:           date,
-		ArtifactId:     artifactId,
-		ArtifactTitle:  firstString(item, "artifact_title", "artifactTitle", "title", "name"),
-		ArtifactType:   firstString(item, "artifact_type", "artifactType", "type"),
-		CreatorUserId:  firstString(item, "creator_id", "creatorId", "creator.user_id", "creator.id"),
-		CreatorEmail:   firstString(item, "creator_email", "creatorEmail", "creator.email"),
-		ViewCount:      firstInt64(item, "view_count", "viewCount", "views"),
-		ShareCount:     firstInt64(item, "share_count", "shareCount", "shares"),
-		RawJson:        string(raw),
+		ConnectionId:                   params.ConnectionId,
+		ScopeId:                        params.ScopeId,
+		OrganizationId:                 params.OrganizationId,
+		Date:                           date,
+		ArtifactType:                   artifactType,
+		IsShared:                       firstBool(item, "is_shared"),
+		ArtifactsCreatedCount:          firstInt64(item, "artifacts_created_count"),
+		PublishedArtifactsCreatedCount: firstInt64(item, "published_artifacts_created_count"),
+		DistinctUserCount:              firstInt64(item, "distinct_user_count"),
+		ArtifactId:                     firstString(item, "artifact_id"),
+		ArtifactTitle:                  firstString(item, "artifact_title"),
+		CreatorUserId:                  firstString(item, "creator_id"),
+		CreatorEmail:                   firstString(item, "creator_email"),
+		ViewCount:                      firstInt64(item, "view_count"),
+		ShareCount:                     firstInt64(item, "share_count"),
+		RawJson:                        string(raw),
 	}, nil
 }

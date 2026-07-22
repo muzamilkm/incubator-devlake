@@ -31,7 +31,7 @@ var connectorsEndpoint = analyticsEndpoint{
 	RawTable:        RawConnectorsTable,
 	Path:            "organizations/analytics/connectors",
 	Description:     "Claude Enterprise connector adoption",
-	DateStyle:       dateParamStartingDate,
+	DateStyle:       dateParamDate,
 	Paginated:       true,
 	DailyIterated:   true,
 	ExtraToolTables: []string{"_tool_claude_enterprise_connectors"},

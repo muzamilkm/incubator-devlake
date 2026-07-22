@@ -48,6 +48,8 @@ type claudeSummary20260713 struct {
 	OrganizationId     string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
 	Date               string `gorm:"primaryKey;type:varchar(32)" json:"date"`
 	Grain              string `gorm:"type:varchar(32)" json:"grain"`
+	StartingAt         string `gorm:"type:varchar(64)" json:"startingAt"`
+	EndingAt           string `gorm:"type:varchar(64)" json:"endingAt"`
 	AssignedSeats      int    `json:"assignedSeats"`
 	PendingInvites     int    `json:"pendingInvites"`
 	DailyActiveUsers   int    `json:"dailyActiveUsers"`

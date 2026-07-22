@@ -48,7 +48,7 @@ func BuildChatProjectRecord(raw []byte, params analyticsRawParams) (*models.Clau
 		return nil, errors.Default.Wrap(err, "failed to parse Claude Enterprise chat project item")
 	}
 
-	date := firstString(item, "date", "starting_date", "day")
+	date := firstNonEmpty(params.RequestDate, firstString(item, "date", "starting_date", "day"))
 	if date == "" {
 		return nil, errors.BadInput.New("Claude Enterprise chat project item is missing date")
 	}
@@ -58,16 +58,20 @@ func BuildChatProjectRecord(raw []byte, params analyticsRawParams) (*models.Clau
 	}
 
 	return &models.ClaudeEnterpriseChatProject{
-		ConnectionId:       params.ConnectionId,
-		ScopeId:            params.ScopeId,
-		OrganizationId:     params.OrganizationId,
-		Date:               date,
-		ProjectId:          projectId,
-		ProjectName:        firstString(item, "project_name", "projectName", "name"),
-		CreatorUserId:      firstString(item, "creator_id", "creatorId", "creator.user_id", "creator.id"),
-		CreatorEmail:       firstString(item, "creator_email", "creatorEmail", "creator.email"),
-		MembersCount:       firstInt(item, "members_count", "membersCount"),
-		ConversationsCount: firstInt64(item, "conversations_count", "conversationsCount"),
-		RawJson:            string(raw),
+		ConnectionId:              params.ConnectionId,
+		ScopeId:                   params.ScopeId,
+		OrganizationId:            params.OrganizationId,
+		Date:                      date,
+		ProjectId:                 projectId,
+		ProjectName:               firstString(item, "project_name"),
+		CreatedAt:                 firstString(item, "created_at"),
+		CreatorUserId:             firstString(item, "created_by.id"),
+		CreatorEmail:              firstString(item, "created_by.email_address"),
+		DistinctUserCount:         firstInt64(item, "distinct_user_count"),
+		DistinctConversationCount: firstInt64(item, "distinct_conversation_count"),
+		MessageCount:              firstInt64(item, "message_count"),
+		MembersCount:              firstInt(item, "members_count"),
+		ConversationsCount:        firstInt64(item, "conversations_count"),
+		RawJson:                   string(raw),
 	}, nil
 }

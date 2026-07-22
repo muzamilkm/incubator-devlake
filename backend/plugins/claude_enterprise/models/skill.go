@@ -34,21 +34,28 @@ import "github.com/apache/incubator-devlake/core/models/common"
 type ClaudeEnterpriseSkill struct {
 	common.NoPKModel
 
-	ConnectionId   uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId        string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
-	Date           string `gorm:"primaryKey;type:varchar(32)" json:"date"`
-	SkillId        string `gorm:"primaryKey;type:varchar(255)" json:"skillId"`
-
-	SkillName string `json:"skillName" gorm:"type:varchar(255)"`
-	// SkillType is Provisional: e.g. "custom" or "built_in".
-	SkillType string `json:"skillType" gorm:"type:varchar(100)"`
-	// CreatorUserId and CreatorEmail are Provisional.
-	CreatorUserId string `json:"creatorUserId" gorm:"type:varchar(255)"`
-	CreatorEmail  string `json:"creatorEmail" gorm:"type:varchar(255)"`
-	// ActiveUsers and UsageCount are Provisional daily adoption metrics.
-	ActiveUsers int   `json:"activeUsers"`
-	UsageCount  int64 `json:"usageCount"`
+	ConnectionId                            uint64 `gorm:"primaryKey" json:"connectionId"`
+	ScopeId                                 string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
+	OrganizationId                          string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	Date                                    string `gorm:"primaryKey;type:varchar(32)" json:"date"`
+	SkillName                               string `gorm:"primaryKey;type:varchar(255)" json:"skillName"`
+	SkillDisplayName                        string `json:"skillDisplayName" gorm:"type:varchar(255)"`
+	DistinctUserCount                       int64  `json:"distinctUserCount"`
+	InvocationCount                         int64  `json:"invocationCount"`
+	EnableCount                             int64  `json:"enableCount"`
+	AttributedListPrice                     string `json:"attributedListPrice" gorm:"type:varchar(128)"`
+	EstimatedOverageSpend                   string `json:"estimatedOverageSpend" gorm:"type:varchar(128)"`
+	Currency                                string `json:"currency" gorm:"type:varchar(16)"`
+	ShareStatus                             string `json:"shareStatus" gorm:"type:varchar(32)"`
+	ChatDistinctConversationSkillUsedCount  int64  `json:"chatDistinctConversationSkillUsedCount"`
+	ClaudeCodeDistinctSessionSkillUsedCount int64  `json:"claudeCodeDistinctSessionSkillUsedCount"`
+	CoworkDistinctSessionSkillUsedCount     int64  `json:"coworkDistinctSessionSkillUsedCount"`
+	SkillId                                 string `gorm:"-" json:"-"`
+	SkillType                               string `gorm:"-" json:"-"`
+	CreatorUserId                           string `gorm:"-" json:"-"`
+	CreatorEmail                            string `gorm:"-" json:"-"`
+	ActiveUsers                             int    `gorm:"-" json:"-"`
+	UsageCount                              int64  `gorm:"-" json:"-"`
 
 	RawJson string `json:"rawJson" gorm:"type:longtext"`
 }

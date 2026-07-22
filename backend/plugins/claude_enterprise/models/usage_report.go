@@ -33,15 +33,22 @@ type ClaudeEnterpriseUsageReport struct {
 	EndingAt        string `gorm:"primaryKey;type:varchar(64)" json:"endingAt"`
 	UserId          string `gorm:"primaryKey;type:varchar(255)" json:"userId"`
 	UserEmail       string `gorm:"type:varchar(255)" json:"userEmail"`
+	DeletedActor    bool   `json:"deletedActor"`
 	Product         string `gorm:"primaryKey;type:varchar(100)" json:"product"`
 	Model           string `gorm:"primaryKey;type:varchar(255)" json:"model"`
+	ContextWindow   string `gorm:"type:varchar(32)" json:"contextWindow"`
+	InferenceGeo    string `gorm:"type:varchar(32)" json:"inferenceGeo"`
+	Speed           string `gorm:"type:varchar(32)" json:"speed"`
 	DataRefreshedAt string `gorm:"type:varchar(64)" json:"dataRefreshedAt"`
 
-	InputTokens         int64 `json:"inputTokens"`
-	OutputTokens        int64 `json:"outputTokens"`
-	CacheReadTokens     int64 `json:"cacheReadTokens"`
-	CacheCreationTokens int64 `json:"cacheCreationTokens"`
-	RequestCount        int64 `json:"requestCount"`
+	InputTokens           int64 `json:"inputTokens"`
+	OutputTokens          int64 `json:"outputTokens"`
+	CacheReadTokens       int64 `json:"cacheReadTokens"`
+	CacheCreation1hTokens int64 `json:"cacheCreation1hTokens"`
+	CacheCreation5mTokens int64 `json:"cacheCreation5mTokens"`
+	TotalTokens           int64 `json:"totalTokens"`
+	RequestCount          int64 `json:"requestCount"`
+	WebSearchRequests     int64 `json:"webSearchRequests"`
 
 	RawJson string `gorm:"type:longtext" json:"rawJson"`
 }

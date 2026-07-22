@@ -33,14 +33,20 @@ type ClaudeEnterpriseCostReport struct {
 	EndingAt        string `gorm:"primaryKey;type:varchar(64)" json:"endingAt"`
 	UserId          string `gorm:"primaryKey;type:varchar(255)" json:"userId"`
 	UserEmail       string `gorm:"type:varchar(255)" json:"userEmail"`
+	DeletedActor    bool   `json:"deletedActor"`
 	Product         string `gorm:"primaryKey;type:varchar(100)" json:"product"`
 	Model           string `gorm:"primaryKey;type:varchar(255)" json:"model"`
+	ContextWindow   string `gorm:"type:varchar(32)" json:"contextWindow"`
+	InferenceGeo    string `gorm:"type:varchar(32)" json:"inferenceGeo"`
+	Speed           string `gorm:"type:varchar(32)" json:"speed"`
 	CostType        string `gorm:"primaryKey;type:varchar(100)" json:"costType"`
+	TokenType       string `gorm:"primaryKey;type:varchar(100)" json:"tokenType"`
 	Currency        string `gorm:"primaryKey;type:varchar(16)" json:"currency"`
 	DataRefreshedAt string `gorm:"type:varchar(64)" json:"dataRefreshedAt"`
 
-	Amount     string `gorm:"type:varchar(128)" json:"amount"`
-	ListAmount string `gorm:"type:varchar(128)" json:"listAmount"`
+	Amount       string `gorm:"type:varchar(128)" json:"amount"`
+	ListAmount   string `gorm:"type:varchar(128)" json:"listAmount"`
+	RequestCount int64  `json:"requestCount"`
 
 	RawJson string `gorm:"type:longtext" json:"rawJson"`
 }

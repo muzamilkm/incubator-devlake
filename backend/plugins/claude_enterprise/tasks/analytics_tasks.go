@@ -51,6 +51,7 @@ type dateParamStyle int
 const (
 	dateParamStartingDate dateParamStyle = iota
 	dateParamStartingAt
+	dateParamDate
 )
 
 type analyticsEndpoint struct {
@@ -93,7 +94,7 @@ var (
 		RawTable:      RawUserActivitiesTable,
 		Path:          "organizations/analytics/users",
 		Description:   "Claude Enterprise per-user activity",
-		DateStyle:     dateParamStartingDate,
+		DateStyle:     dateParamDate,
 		Paginated:     true,
 		DailyIterated: true,
 	}
@@ -260,7 +261,8 @@ func extractAnalyticsEndpoint(taskCtx plugin.SubTaskContext, endpoint analyticsE
 			Options: params,
 		},
 		Extract: func(row *helper.RawData) ([]interface{}, errors.Error) {
-			record, buildErr := BuildAnalyticsRecord(row.Data, params)
+			rowParams := analyticsParamsForRawData(params, row)
+			record, buildErr := BuildAnalyticsRecord(row.Data, rowParams)
 			if buildErr != nil {
 				return nil, buildErr
 			}
@@ -302,11 +304,12 @@ func extractTypedAnalyticsEndpoint(
 			Options: params,
 		},
 		Extract: func(row *helper.RawData) ([]interface{}, errors.Error) {
-			record, buildErr := BuildAnalyticsRecord(row.Data, params)
+			rowParams := analyticsParamsForRawData(params, row)
+			record, buildErr := BuildAnalyticsRecord(row.Data, rowParams)
 			if buildErr != nil {
 				return nil, buildErr
 			}
-			typed, typedErr := buildTyped(row.Data, params)
+			typed, typedErr := buildTyped(row.Data, rowParams)
 			if typedErr != nil {
 				return nil, typedErr
 			}
@@ -338,11 +341,12 @@ func extractSummariesEndpoint(taskCtx plugin.SubTaskContext) errors.Error {
 			Options: params,
 		},
 		Extract: func(row *helper.RawData) ([]interface{}, errors.Error) {
-			record, buildErr := BuildAnalyticsRecord(row.Data, params)
+			rowParams := analyticsParamsForRawData(params, row)
+			record, buildErr := BuildAnalyticsRecord(row.Data, rowParams)
 			if buildErr != nil {
 				return nil, buildErr
 			}
-			summary, summaryErr := BuildSummaryRecord(row.Data, params)
+			summary, summaryErr := BuildSummaryRecord(row.Data, rowParams)
 			if summaryErr != nil {
 				return nil, summaryErr
 			}
@@ -374,11 +378,12 @@ func extractUsageReportEndpoint(taskCtx plugin.SubTaskContext) errors.Error {
 			Options: params,
 		},
 		Extract: func(row *helper.RawData) ([]interface{}, errors.Error) {
-			record, buildErr := BuildAnalyticsRecord(row.Data, params)
+			rowParams := analyticsParamsForRawData(params, row)
+			record, buildErr := BuildAnalyticsRecord(row.Data, rowParams)
 			if buildErr != nil {
 				return nil, buildErr
 			}
-			usage, usageErr := BuildUsageReport(row.Data, params)
+			usage, usageErr := BuildUsageReport(row.Data, rowParams)
 			if usageErr != nil {
 				return nil, usageErr
 			}
@@ -410,11 +415,12 @@ func extractCostReportEndpoint(taskCtx plugin.SubTaskContext) errors.Error {
 			Options: params,
 		},
 		Extract: func(row *helper.RawData) ([]interface{}, errors.Error) {
-			record, buildErr := BuildAnalyticsRecord(row.Data, params)
+			rowParams := analyticsParamsForRawData(params, row)
+			record, buildErr := BuildAnalyticsRecord(row.Data, rowParams)
 			if buildErr != nil {
 				return nil, buildErr
 			}
-			cost, costErr := BuildCostReport(row.Data, params)
+			cost, costErr := BuildCostReport(row.Data, rowParams)
 			if costErr != nil {
 				return nil, costErr
 			}
@@ -439,10 +445,10 @@ func BuildAnalyticsRecord(raw []byte, params analyticsRawParams) (*models.Claude
 		ScopeId:        params.ScopeId,
 		OrganizationId: params.OrganizationId,
 		Endpoint:       params.Endpoint,
-		Date:           firstString(item, "date", "starting_date", "starting_at", "start_date", "day"),
+		Date:           firstNonEmpty(params.RequestDate, firstString(item, "date", "starting_date", "starting_at", "start_date", "day")),
 		Grain:          firstString(item, "grain", "period", "granularity"),
 		UserId:         firstString(item, "user_id", "userId", "user.id", "actor.user_id"),
-		UserEmail:      firstString(item, "email", "user_email", "userEmail", "user.email", "actor.email_address"),
+		UserEmail:      firstString(item, "email", "user_email", "userEmail", "user.email_address", "actor.email"),
 		Product:        firstString(item, "product", "product_type", "source"),
 		Model:          firstString(item, "model", "model_name"),
 		RawJson:        string(raw),
@@ -459,7 +465,7 @@ func BuildSummaryRecord(raw []byte, params analyticsRawParams) (*models.ClaudeEn
 		return nil, errors.Default.Wrap(err, "failed to parse Claude Enterprise summary item")
 	}
 
-	date := firstString(item, "date", "starting_date", "day")
+	date := firstNonEmpty(params.RequestDate, firstString(item, "date", "starting_date", "day", "starting_at"))
 	if date == "" {
 		return nil, errors.BadInput.New("Claude Enterprise summary item is missing date")
 	}
@@ -470,11 +476,13 @@ func BuildSummaryRecord(raw []byte, params analyticsRawParams) (*models.ClaudeEn
 		OrganizationId:     params.OrganizationId,
 		Date:               date,
 		Grain:              firstString(item, "grain", "period", "granularity"),
-		AssignedSeats:      firstInt(item, "assigned_seats", "assignedSeats", "seats.assigned"),
-		PendingInvites:     firstInt(item, "pending_invites", "pendingInvites", "invites.pending"),
-		DailyActiveUsers:   firstInt(item, "dau", "daily_active_users", "dailyActiveUsers", "active_users.daily"),
-		WeeklyActiveUsers:  firstInt(item, "wau", "weekly_active_users", "weeklyActiveUsers", "active_users.weekly"),
-		MonthlyActiveUsers: firstInt(item, "mau", "monthly_active_users", "monthlyActiveUsers", "active_users.monthly"),
+		StartingAt:         firstString(item, "starting_at"),
+		EndingAt:           firstString(item, "ending_at"),
+		AssignedSeats:      firstInt(item, "assigned_seat_count"),
+		PendingInvites:     firstInt(item, "pending_invite_count"),
+		DailyActiveUsers:   firstInt(item, "daily_active_user_count"),
+		WeeklyActiveUsers:  firstInt(item, "weekly_active_user_count"),
+		MonthlyActiveUsers: firstInt(item, "monthly_active_user_count"),
 		RawJson:            string(raw),
 	}, nil
 }
@@ -493,22 +501,29 @@ func BuildUsageReport(raw []byte, params analyticsRawParams) (*models.ClaudeEnte
 	}
 
 	return &models.ClaudeEnterpriseUsageReport{
-		ConnectionId:        params.ConnectionId,
-		ScopeId:             params.ScopeId,
-		OrganizationId:      effectiveItemOrganizationId(item, params),
-		StartingAt:          startingAt,
-		EndingAt:            firstString(item, "ending_at"),
-		UserId:              firstString(item, "user_id", "userId", "user.id"),
-		UserEmail:           firstString(item, "email", "user_email", "userEmail", "user.email"),
-		Product:             firstString(item, "product", "product_type", "source"),
-		Model:               firstString(item, "model", "model_name"),
-		DataRefreshedAt:     firstString(item, "data_refreshed_at", "dataRefreshedAt"),
-		InputTokens:         firstInt64(item, "input_tokens", "inputTokens"),
-		OutputTokens:        firstInt64(item, "output_tokens", "outputTokens"),
-		CacheReadTokens:     firstInt64(item, "cache_read_tokens", "cacheReadTokens"),
-		CacheCreationTokens: firstInt64(item, "cache_creation_tokens", "cacheCreationTokens"),
-		RequestCount:        firstInt64(item, "request_count", "requestCount"),
-		RawJson:             string(raw),
+		ConnectionId:          params.ConnectionId,
+		ScopeId:               params.ScopeId,
+		OrganizationId:        effectiveItemOrganizationId(item, params),
+		StartingAt:            startingAt,
+		EndingAt:              firstString(item, "ending_at"),
+		UserId:                firstString(item, "actor.user_id"),
+		UserEmail:             firstString(item, "actor.email"),
+		DeletedActor:          firstBool(item, "actor.deleted"),
+		Product:               firstString(item, "product", "product_type", "source"),
+		Model:                 firstString(item, "model", "model_name"),
+		DataRefreshedAt:       firstString(item, "data_refreshed_at", "dataRefreshedAt"),
+		ContextWindow:         firstString(item, "context_window"),
+		InferenceGeo:          firstString(item, "inference_geo"),
+		Speed:                 firstString(item, "speed"),
+		InputTokens:           firstInt64(item, "uncached_input_tokens"),
+		OutputTokens:          firstInt64(item, "output_tokens", "outputTokens"),
+		CacheReadTokens:       firstInt64(item, "cache_read_tokens", "cacheReadTokens"),
+		CacheCreation1hTokens: firstInt64(item, "cache_creation.ephemeral_1h_input_tokens"),
+		CacheCreation5mTokens: firstInt64(item, "cache_creation.ephemeral_5m_input_tokens"),
+		TotalTokens:           firstInt64(item, "total_tokens"),
+		RequestCount:          firstInt64(item, "requests"),
+		WebSearchRequests:     firstInt64(item, "server_tool_use.web_search_requests"),
+		RawJson:               string(raw),
 	}, nil
 }
 
@@ -531,23 +546,30 @@ func BuildCostReport(raw []byte, params analyticsRawParams) (*models.ClaudeEnter
 		OrganizationId:  effectiveItemOrganizationId(item, params),
 		StartingAt:      startingAt,
 		EndingAt:        firstString(item, "ending_at"),
-		UserId:          firstString(item, "user_id", "userId", "user.id"),
-		UserEmail:       firstString(item, "email", "user_email", "userEmail", "user.email"),
+		UserId:          firstString(item, "actor.user_id"),
+		UserEmail:       firstString(item, "actor.email"),
+		DeletedActor:    firstBool(item, "actor.deleted"),
 		Product:         firstString(item, "product", "product_type", "source"),
 		Model:           firstString(item, "model", "model_name"),
+		ContextWindow:   firstString(item, "context_window"),
+		InferenceGeo:    firstString(item, "inference_geo"),
+		Speed:           firstString(item, "speed"),
 		CostType:        firstString(item, "cost_type", "costType"),
+		TokenType:       firstString(item, "token_type"),
 		Currency:        firstString(item, "currency"),
 		DataRefreshedAt: firstString(item, "data_refreshed_at", "dataRefreshedAt"),
 		Amount:          firstDecimalString(item, "amount"),
 		ListAmount:      firstDecimalString(item, "list_amount", "listAmount"),
+		RequestCount:    firstInt64(item, "requests"),
 		RawJson:         string(raw),
 	}, nil
 }
 
 type analyticsResponseEnvelope struct {
-	Data    []json.RawMessage `json:"data"`
-	Items   []json.RawMessage `json:"items"`
-	Results []json.RawMessage `json:"results"`
+	Data      []json.RawMessage `json:"data"`
+	Items     []json.RawMessage `json:"items"`
+	Results   []json.RawMessage `json:"results"`
+	Summaries []json.RawMessage `json:"summaries"`
 }
 
 type analyticsPaginationEnvelope struct {
@@ -580,6 +602,8 @@ func parseAnalyticsResponse(res *http.Response) ([]json.RawMessage, errors.Error
 		return envelope.Items, nil
 	case envelope.Results != nil:
 		return envelope.Results, nil
+	case envelope.Summaries != nil:
+		return envelope.Summaries, nil
 	default:
 		return []json.RawMessage{body}, nil
 	}
@@ -676,6 +700,17 @@ func firstInt64(item map[string]interface{}, paths ...string) int64 {
 	return 0
 }
 
+func firstBool(item map[string]interface{}, paths ...string) bool {
+	for _, path := range paths {
+		if value, ok := lookupPath(item, strings.Split(path, ".")); ok {
+			if typed, ok := value.(bool); ok {
+				return typed
+			}
+		}
+	}
+	return false
+}
+
 func firstDecimalString(item map[string]interface{}, paths ...string) string {
 	for _, path := range paths {
 		if value, ok := lookupPath(item, strings.Split(path, ".")); ok {
@@ -701,6 +736,17 @@ func effectiveItemOrganizationId(item map[string]interface{}, params analyticsRa
 		return organizationId
 	}
 	return params.OrganizationId
+}
+
+func analyticsParamsForRawData(params analyticsRawParams, row *helper.RawData) analyticsRawParams {
+	if row == nil || len(row.Input) == 0 {
+		return params
+	}
+	var input analyticsDayInput
+	if err := json.Unmarshal(row.Input, &input); err == nil {
+		params.RequestDate = input.StartingDate
+	}
+	return params
 }
 
 func lookupPath(item map[string]interface{}, path []string) (interface{}, bool) {
@@ -847,6 +893,10 @@ func setDateQuery(query url.Values, style dateParamStyle, startingDate string, e
 		}
 		return
 	}
+	if style == dateParamDate {
+		query.Set("date", startingDate)
+		return
+	}
 	query.Set("starting_date", startingDate)
 	if endingDate != "" {
 		query.Set("ending_date", endingDate)
@@ -884,6 +934,7 @@ type analyticsRawParams struct {
 	ScopeId        string `json:"scopeId"`
 	OrganizationId string `json:"organizationId"`
 	Endpoint       string `json:"endpoint"`
+	RequestDate    string `json:"-"`
 }
 
 func (p analyticsRawParams) GetParams() any {

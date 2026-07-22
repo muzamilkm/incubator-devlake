@@ -33,19 +33,23 @@ import "github.com/apache/incubator-devlake/core/models/common"
 type ClaudeEnterpriseConnector struct {
 	common.NoPKModel
 
-	ConnectionId   uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId        string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
-	Date           string `gorm:"primaryKey;type:varchar(32)" json:"date"`
-	ConnectorId    string `gorm:"primaryKey;type:varchar(255)" json:"connectorId"`
-
-	ConnectorName string `json:"connectorName" gorm:"type:varchar(255)"`
-	// ConnectorType and Status are Provisional.
-	ConnectorType string `json:"connectorType" gorm:"type:varchar(100)"`
-	Status        string `json:"status" gorm:"type:varchar(50)"`
-	// ActiveUsers and UsageCount are Provisional daily adoption metrics.
-	ActiveUsers int   `json:"activeUsers"`
-	UsageCount  int64 `json:"usageCount"`
+	ConnectionId                                uint64 `gorm:"primaryKey" json:"connectionId"`
+	ScopeId                                     string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
+	OrganizationId                              string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	Date                                        string `gorm:"primaryKey;type:varchar(32)" json:"date"`
+	ConnectorName                               string `gorm:"primaryKey;type:varchar(255)" json:"connectorName"`
+	DistinctUserCount                           int64  `json:"distinctUserCount"`
+	ReadCallCount                               int64  `json:"readCallCount"`
+	WriteCallCount                              int64  `json:"writeCallCount"`
+	UnclassifiedCallCount                       int64  `json:"unclassifiedCallCount"`
+	ChatDistinctConversationConnectorUsedCount  int64  `json:"chatDistinctConversationConnectorUsedCount"`
+	ClaudeCodeDistinctSessionConnectorUsedCount int64  `json:"claudeCodeDistinctSessionConnectorUsedCount"`
+	CoworkDistinctSessionConnectorUsedCount     int64  `json:"coworkDistinctSessionConnectorUsedCount"`
+	ConnectorId                                 string `gorm:"-" json:"-"`
+	ConnectorType                               string `gorm:"-" json:"-"`
+	Status                                      string `gorm:"-" json:"-"`
+	ActiveUsers                                 int    `gorm:"-" json:"-"`
+	UsageCount                                  int64  `gorm:"-" json:"-"`
 
 	RawJson string `json:"rawJson" gorm:"type:longtext"`
 }

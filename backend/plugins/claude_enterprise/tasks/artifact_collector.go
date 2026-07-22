@@ -31,7 +31,7 @@ var artifactsEndpoint = analyticsEndpoint{
 	RawTable:        RawArtifactsTable,
 	Path:            "organizations/analytics/artifacts",
 	Description:     "Claude Enterprise artifact adoption",
-	DateStyle:       dateParamStartingDate,
+	DateStyle:       dateParamDate,
 	Paginated:       true,
 	DailyIterated:   true,
 	ExtraToolTables: []string{"_tool_claude_enterprise_artifacts"},

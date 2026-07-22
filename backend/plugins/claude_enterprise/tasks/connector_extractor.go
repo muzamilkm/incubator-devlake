@@ -47,26 +47,33 @@ func BuildConnectorRecord(raw []byte, params analyticsRawParams) (*models.Claude
 		return nil, errors.Default.Wrap(err, "failed to parse Claude Enterprise connector item")
 	}
 
-	date := firstString(item, "date", "starting_date", "day")
+	date := firstNonEmpty(params.RequestDate, firstString(item, "date", "starting_date", "day"))
 	if date == "" {
 		return nil, errors.BadInput.New("Claude Enterprise connector item is missing date")
 	}
-	connectorId := firstString(item, "connector_id", "connectorId", "id")
-	if connectorId == "" {
-		return nil, errors.BadInput.New("Claude Enterprise connector item is missing connector id")
+	connectorName := firstString(item, "connector_name")
+	if connectorName == "" {
+		return nil, errors.BadInput.New("Claude Enterprise connector item is missing connector name")
 	}
 
 	return &models.ClaudeEnterpriseConnector{
-		ConnectionId:   params.ConnectionId,
-		ScopeId:        params.ScopeId,
-		OrganizationId: params.OrganizationId,
-		Date:           date,
-		ConnectorId:    connectorId,
-		ConnectorName:  firstString(item, "connector_name", "connectorName", "name"),
-		ConnectorType:  firstString(item, "connector_type", "connectorType", "type"),
-		Status:         firstString(item, "status"),
-		ActiveUsers:    firstInt(item, "active_users", "activeUsers", "users_count", "usersCount"),
-		UsageCount:     firstInt64(item, "usage_count", "usageCount", "invocations", "invocation_count"),
-		RawJson:        string(raw),
+		ConnectionId:          params.ConnectionId,
+		ScopeId:               params.ScopeId,
+		OrganizationId:        params.OrganizationId,
+		Date:                  date,
+		ConnectorName:         connectorName,
+		DistinctUserCount:     firstInt64(item, "distinct_user_count"),
+		ReadCallCount:         firstInt64(item, "read_call_count"),
+		WriteCallCount:        firstInt64(item, "write_call_count"),
+		UnclassifiedCallCount: firstInt64(item, "unclassified_call_count"),
+		ChatDistinctConversationConnectorUsedCount:  firstInt64(item, "chat_metrics.distinct_conversation_connector_used_count"),
+		ClaudeCodeDistinctSessionConnectorUsedCount: firstInt64(item, "claude_code_metrics.distinct_session_connector_used_count"),
+		CoworkDistinctSessionConnectorUsedCount:     firstInt64(item, "cowork_metrics.distinct_session_connector_used_count"),
+		ConnectorId:                                 firstString(item, "connector_id"),
+		ConnectorType:                               firstString(item, "connector_type"),
+		Status:                                      firstString(item, "status"),
+		ActiveUsers:                                 firstInt(item, "active_users"),
+		UsageCount:                                  firstInt64(item, "usage_count"),
+		RawJson:                                     string(raw),
 	}, nil
 }

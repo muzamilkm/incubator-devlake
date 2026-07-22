@@ -33,20 +33,21 @@ import "github.com/apache/incubator-devlake/core/models/common"
 type ClaudeEnterpriseArtifact struct {
 	common.NoPKModel
 
-	ConnectionId   uint64 `gorm:"primaryKey" json:"connectionId"`
-	ScopeId        string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
-	OrganizationId string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
-	Date           string `gorm:"primaryKey;type:varchar(32)" json:"date"`
-	ArtifactId     string `gorm:"primaryKey;type:varchar(255)" json:"artifactId"`
-
-	ArtifactTitle string `json:"artifactTitle" gorm:"type:varchar(255)"`
-	// ArtifactType, CreatorUserId, and CreatorEmail are Provisional.
-	ArtifactType  string `json:"artifactType" gorm:"type:varchar(100)"`
-	CreatorUserId string `json:"creatorUserId" gorm:"type:varchar(255)"`
-	CreatorEmail  string `json:"creatorEmail" gorm:"type:varchar(255)"`
-	// ViewCount and ShareCount are Provisional daily adoption metrics.
-	ViewCount  int64 `json:"viewCount"`
-	ShareCount int64 `json:"shareCount"`
+	ConnectionId                   uint64 `gorm:"primaryKey" json:"connectionId"`
+	ScopeId                        string `gorm:"primaryKey;type:varchar(255)" json:"scopeId"`
+	OrganizationId                 string `gorm:"primaryKey;type:varchar(255)" json:"organizationId"`
+	Date                           string `gorm:"primaryKey;type:varchar(32)" json:"date"`
+	ArtifactType                   string `gorm:"primaryKey;type:varchar(100)" json:"artifactType"`
+	IsShared                       bool   `gorm:"primaryKey" json:"isShared"`
+	ArtifactsCreatedCount          int64  `json:"artifactsCreatedCount"`
+	PublishedArtifactsCreatedCount int64  `json:"publishedArtifactsCreatedCount"`
+	DistinctUserCount              int64  `json:"distinctUserCount"`
+	ArtifactId                     string `gorm:"-" json:"-"`
+	ArtifactTitle                  string `gorm:"-" json:"-"`
+	CreatorUserId                  string `gorm:"-" json:"-"`
+	CreatorEmail                   string `gorm:"-" json:"-"`
+	ViewCount                      int64  `gorm:"-" json:"-"`
+	ShareCount                     int64  `gorm:"-" json:"-"`
 
 	RawJson string `json:"rawJson" gorm:"type:longtext"`
 }

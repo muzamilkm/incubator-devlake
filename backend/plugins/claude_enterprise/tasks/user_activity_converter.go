@@ -53,6 +53,20 @@ func BuildUserActivity(
 	accountId string,
 	record *models.ClaudeEnterpriseAnalyticsRecord,
 ) (*ai.AiActivity, errors.Error) {
+	activities, err := BuildUserActivities(idGen, accountId, record)
+	if err != nil || len(activities) == 0 {
+		return nil, err
+	}
+	return activities[0], nil
+}
+
+// BuildUserActivities fans out the documented Chat and Claude Code metric
+// blocks into independently queryable activities.
+func BuildUserActivities(
+	idGen *didgen.DomainIdGenerator,
+	accountId string,
+	record *models.ClaudeEnterpriseAnalyticsRecord,
+) ([]*ai.AiActivity, errors.Error) {
 	if record == nil || record.Endpoint != userActivitiesEndpoint.Name {
 		return nil, nil
 	}
@@ -62,39 +76,50 @@ func BuildUserActivity(
 		return nil, errors.Default.Wrap(err, "failed to parse Claude Enterprise user activity payload")
 	}
 
-	product := strings.ToLower(firstNonEmpty(record.Product, firstString(item, "product", "product_type", "source")))
-	activityType, interfaceType := userActivitySemantics(product)
-	if activityType == "" {
-		return nil, nil
-	}
-
 	dateText := firstNonEmpty(record.Date, firstString(item, "date", "starting_date", "day"))
 	date, err := time.Parse("2006-01-02", dateText)
 	if err != nil {
 		return nil, errors.BadInput.Wrap(err, "invalid Claude Enterprise user activity date")
 	}
 
-	userEmail := firstNonEmpty(record.UserEmail, firstString(item, "email", "user_email", "user.email", "actor.email_address"))
-	model := firstNonEmpty(record.Model, firstString(item, "model", "model_name"))
-	return &ai.AiActivity{
+	userEmail := firstNonEmpty(record.UserEmail, firstString(item, "user.email_address", "email", "user_email"))
+	activities := make([]*ai.AiActivity, 0, 2)
+	if userActivityHasChatMetrics(item) {
+		activities = append(activities, buildUserActivity(idGen, accountId, record, date, userEmail, "chat", item))
+	}
+	if userActivityHasClaudeCodeMetrics(item) {
+		activities = append(activities, buildUserActivity(idGen, accountId, record, date, userEmail, "claude_code", item))
+	}
+	if len(activities) == 0 && record.Product != "" {
+		activities = append(activities, buildUserActivity(idGen, accountId, record, date, userEmail, strings.ToLower(record.Product), item))
+	}
+	return activities, nil
+}
+
+func buildUserActivity(idGen *didgen.DomainIdGenerator, accountId string, record *models.ClaudeEnterpriseAnalyticsRecord, date time.Time, userEmail string, product string, item map[string]interface{}) *ai.AiActivity {
+	activityType, interfaceType := userActivitySemantics(product)
+	activity := &ai.AiActivity{
 		DomainEntity: domainlayer.DomainEntity{
-			Id: idGen.Generate(record.ConnectionId, record.ScopeId, record.OrganizationId, record.Endpoint, record.RecordId),
+			Id: idGen.Generate(record.ConnectionId, record.ScopeId, record.OrganizationId, record.Endpoint, record.RecordId, product),
 		},
-		Provider:         "claude_enterprise",
-		AccountId:        accountId,
-		UserEmail:        userEmail,
-		Date:             date,
-		Type:             activityType,
-		InterfaceType:    interfaceType,
-		Model:            model,
-		NumSessions:      userActivitySessions(product, item),
-		SuggestionsCount: intValue(item, "tool_actions", "suggestions_count"),
-		AcceptanceCount:  intValue(item, "tool_acceptances", "acceptance_count"),
-		LinesAdded:       intValue(item, "lines_added", "linesAdded"),
-		LinesRemoved:     intValue(item, "lines_removed", "linesRemoved"),
-		CommitsCreated:   intValue(item, "commits_created", "commitsCreated"),
-		PrsCreated:       intValue(item, "prs_created", "prsCreated"),
-	}, nil
+		Provider:      "claude_enterprise",
+		AccountId:     accountId,
+		UserEmail:     userEmail,
+		Date:          date,
+		Type:          activityType,
+		InterfaceType: interfaceType,
+		Model:         record.Model,
+		NumSessions:   userActivitySessions(product, item),
+	}
+	if product == "claude_code" {
+		activity.SuggestionsCount = userActivityToolActionCount(item, "rejected_count")
+		activity.AcceptanceCount = userActivityToolActionCount(item, "accepted_count")
+		activity.LinesAdded = intValue(item, "claude_code_metrics.core_metrics.lines_of_code.added_count", "lines_added")
+		activity.LinesRemoved = intValue(item, "claude_code_metrics.core_metrics.lines_of_code.removed_count", "lines_removed")
+		activity.CommitsCreated = intValue(item, "claude_code_metrics.core_metrics.commit_count", "commits_created")
+		activity.PrsCreated = intValue(item, "claude_code_metrics.core_metrics.pull_request_count", "prs_created")
+	}
+	return activity
 }
 
 func ConvertUserActivities(taskCtx plugin.SubTaskContext) errors.Error {
@@ -134,11 +159,15 @@ func ConvertUserActivities(taskCtx plugin.SubTaskContext) errors.Error {
 			if resolveErr != nil {
 				return nil, resolveErr
 			}
-			activity, buildErr := BuildUserActivity(idGen, accountId, record)
-			if buildErr != nil || activity == nil {
+			activities, buildErr := BuildUserActivities(idGen, accountId, record)
+			if buildErr != nil || len(activities) == 0 {
 				return nil, buildErr
 			}
-			return []interface{}{activity}, nil
+			rows := make([]interface{}, len(activities))
+			for i, activity := range activities {
+				rows[i] = activity
+			}
+			return rows, nil
 		},
 	})
 	if err != nil {
@@ -160,9 +189,31 @@ func userActivitySemantics(product string) (string, string) {
 
 func userActivitySessions(product string, item map[string]interface{}) int {
 	if product == "chat" || product == "claude_chat" || product == "claude-chat" {
-		return intValue(item, "conversations", "conversation_count", "num_sessions")
+		return intValue(item, "chat_metrics.distinct_conversation_count")
 	}
-	return intValue(item, "num_sessions", "sessions")
+	return intValue(item, "claude_code_metrics.core_metrics.distinct_session_count", "num_sessions", "sessions")
+}
+
+func userActivityHasChatMetrics(item map[string]interface{}) bool {
+	return intValue(item, "chat_metrics.distinct_conversation_count", "chat_metrics.message_count", "chat_metrics.connectors_used_count") > 0
+}
+
+func userActivityHasClaudeCodeMetrics(item map[string]interface{}) bool {
+	return intValue(item,
+		"claude_code_metrics.core_metrics.distinct_session_count",
+		"claude_code_metrics.core_metrics.commit_count",
+		"claude_code_metrics.core_metrics.pull_request_count",
+		"claude_code_metrics.core_metrics.lines_of_code.added_count",
+		"claude_code_metrics.core_metrics.lines_of_code.removed_count",
+	) > 0 || userActivityToolActionCount(item, "accepted_count") > 0 || userActivityToolActionCount(item, "rejected_count") > 0
+}
+
+func userActivityToolActionCount(item map[string]interface{}, metric string) int {
+	total := 0
+	for _, tool := range []string{"edit_tool", "multi_edit_tool", "notebook_edit_tool", "write_tool"} {
+		total += intValue(item, "claude_code_metrics.tool_actions."+tool+"."+metric)
+	}
+	return total
 }
 
 // resolveClaudeEnterpriseAccountId resolves a Claude Enterprise activity's

@@ -31,7 +31,7 @@ var skillsEndpoint = analyticsEndpoint{
 	RawTable:        RawSkillsTable,
 	Path:            "organizations/analytics/skills",
 	Description:     "Claude Enterprise skill adoption",
-	DateStyle:       dateParamStartingDate,
+	DateStyle:       dateParamDate,
 	Paginated:       true,
 	DailyIterated:   true,
 	ExtraToolTables: []string{"_tool_claude_enterprise_skills"},
