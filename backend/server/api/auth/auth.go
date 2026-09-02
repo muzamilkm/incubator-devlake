@@ -283,6 +283,8 @@ func (s *Service) LinkIdentityInit(c *gin.Context) {
 	s.startOIDCAuthorization(c, name, provider, safeReturnURL(c.Query("return_url")), linkStateID)
 }
 
+func LinkIdentityInit(c *gin.Context) { defaultService.LinkIdentityInit(c) }
+
 func (s *Service) startOIDCAuthorization(c *gin.Context, providerName string, provider *oidchelper.Provider, returnURL, linkStateID string) {
 	cfg, _ := s.providerState()
 
