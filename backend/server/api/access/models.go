@@ -44,24 +44,40 @@ const (
 
 	invalidPageSizeMessage = "pageSize must be 10, 25, or 50"
 
-	ErrCodeDuplicateUser   = "DUPLICATE_USER"
-	ErrCodeDuplicateDomain = "DUPLICATE_DOMAIN"
-	ErrCodeInvalidUser     = "INVALID_USER"
-	ErrCodeInvalidDomain   = "INVALID_DOMAIN"
-	ErrCodeInvalidProvider = "INVALID_OIDC_PROVIDER"
-	ErrCodeProviderBlocked = "OIDC_PROVIDER_BLOCKED"
-	ErrCodeProviderMissing = "OIDC_PROVIDER_MISSING"
-	ErrCodeIdentityLinked  = "OIDC_IDENTITY_LINKED"
+	ErrCodeDuplicateUser            = "DUPLICATE_USER"
+	ErrCodeDuplicateDomain          = "DUPLICATE_DOMAIN"
+	ErrCodeInvalidUser              = "INVALID_USER"
+	ErrCodeInvalidDomain            = "INVALID_DOMAIN"
+	ErrCodeInvalidProvider          = "INVALID_OIDC_PROVIDER"
+	ErrCodeProviderBlocked          = "OIDC_PROVIDER_BLOCKED"
+	ErrCodeProviderMissing          = "OIDC_PROVIDER_MISSING"
+	ErrCodeProviderRevisionConflict = "OIDC_PROVIDER_REVISION_CONFLICT"
+	ErrCodeGrafanaTargetConflict    = "GRAFANA_TARGET_CONFLICT"
+	ErrCodeIdentityLinked           = "OIDC_IDENTITY_LINKED"
 
 	OIDCProviderSourceKey                = "default"
 	OIDCProviderStatusPending            = "pending"
 	OIDCProviderStatusSynchronized       = "synchronized"
 	OIDCProviderStatusFailed             = "failed"
-	OIDCProviderStatusCompensated        = "compensated"
 	OIDCProviderStatusCompensationFailed = "compensation_failed"
+	OIDCProviderStatusNotApplicable      = "not_applicable"
 
-	authOIDCCallbackPath    = "/api/auth/callback"
-	grafanaOIDCCallbackPath = "/login/generic_oauth"
+	authOIDCCallbackPath = "/api/auth/callback"
+)
+
+// GrafanaProviderKind is the closed set of Grafana OSS SSO providers that this
+// integration may configure. It is intentionally distinct from a DevLake OIDC
+// provider key: a customer may name its provider freely, but cannot cause Lake
+// to call an arbitrary Grafana settings endpoint.
+type GrafanaProviderKind string
+
+const (
+	GrafanaProviderNone         GrafanaProviderKind = "none"
+	GrafanaProviderGoogle       GrafanaProviderKind = "google"
+	GrafanaProviderAzureAD      GrafanaProviderKind = "azuread"
+	GrafanaProviderOkta         GrafanaProviderKind = "okta"
+	GrafanaProviderGitLab       GrafanaProviderKind = "gitlab"
+	GrafanaProviderGenericOAuth GrafanaProviderKind = "generic_oauth"
 )
 
 type ApiErrorResponse struct {
@@ -200,21 +216,22 @@ func (OIDCProviderConfiguration) TableName() string { return "auth_oidc_provider
 // serialized and are encrypted by the auth credential protector before persistence.
 type OIDCProvider struct {
 	common.Model
-	ProviderKey           string     `gorm:"type:varchar(64);uniqueIndex:idx_auth_oidc_provider_key" json:"providerKey"`
-	DisplayName           string     `gorm:"type:varchar(255)" json:"displayName"`
-	IssuerURL             string     `gorm:"type:varchar(512);uniqueIndex:idx_auth_oidc_provider_issuer" json:"issuerUrl"`
-	ClientID              string     `gorm:"type:varchar(512)" json:"clientId"`
-	EncryptedClientSecret []byte     `json:"-"`
-	ClientSecretNonce     []byte     `json:"-"`
-	ClientSecretKeyID     string     `gorm:"type:varchar(64)" json:"-"`
-	Scopes                string     `gorm:"type:text" json:"scopes"`
-	Enabled               bool       `gorm:"index:idx_auth_oidc_provider_enabled" json:"enabled"`
-	RetiredAt             *time.Time `gorm:"index:idx_auth_oidc_provider_retired" json:"retiredAt,omitempty"`
-	GrafanaTarget         string     `gorm:"type:varchar(32);not null;default:'none';index:idx_auth_oidc_provider_grafana_target" json:"grafanaTarget"`
-	GrafanaSyncStatus     string     `gorm:"type:varchar(32);not null;default:'pending'" json:"grafanaSyncStatus"`
-	GrafanaSyncedRevision uint64     `gorm:"not null;default:0" json:"grafanaSyncedRevision"`
-	GrafanaLastSyncedAt   *time.Time `json:"grafanaLastSyncedAt,omitempty"`
-	GrafanaLastErrorCode  string     `gorm:"type:varchar(64)" json:"grafanaLastErrorCode,omitempty"`
+	ProviderKey           string              `gorm:"type:varchar(64);uniqueIndex:idx_auth_oidc_provider_key" json:"providerKey"`
+	DisplayName           string              `gorm:"type:varchar(255)" json:"displayName"`
+	IssuerURL             string              `gorm:"type:varchar(512);uniqueIndex:idx_auth_oidc_provider_issuer" json:"issuerUrl"`
+	ClientID              string              `gorm:"type:varchar(512)" json:"clientId"`
+	EncryptedClientSecret []byte              `gorm:"type:blob" json:"-"`
+	ClientSecretNonce     []byte              `gorm:"type:blob" json:"-"`
+	ClientSecretKeyID     string              `gorm:"type:varchar(64)" json:"-"`
+	Scopes                string              `gorm:"type:text" json:"scopes"`
+	Enabled               bool                `gorm:"index:idx_auth_oidc_provider_enabled" json:"enabled"`
+	Revision              uint64              `gorm:"not null;default:0" json:"revision"`
+	RetiredAt             *time.Time          `gorm:"index:idx_auth_oidc_provider_retired" json:"retiredAt,omitempty"`
+	GrafanaTarget         GrafanaProviderKind `gorm:"type:varchar(32);not null;default:'none';index:idx_auth_oidc_provider_grafana_target" json:"grafanaTarget"`
+	GrafanaSyncStatus     string              `gorm:"type:varchar(32);not null;default:'pending'" json:"grafanaSyncStatus"`
+	GrafanaSyncedRevision uint64              `gorm:"not null;default:0" json:"grafanaSyncedRevision"`
+	GrafanaLastSyncedAt   *time.Time          `json:"grafanaLastSyncedAt,omitempty"`
+	GrafanaLastErrorCode  string              `gorm:"type:varchar(64)" json:"grafanaLastErrorCode,omitempty"`
 }
 
 func (OIDCProvider) TableName() string { return "auth_oidc_providers" }
@@ -224,18 +241,18 @@ func (OIDCProvider) TableName() string { return "auth_oidc_providers" }
 // Grafana, and is retained after promotion for audit/recovery rather than hard-deleted.
 type OIDCProviderCandidate struct {
 	common.Model
-	ProviderID            uint64     `gorm:"index:idx_auth_oidc_provider_candidate_provider"`
-	ProviderKey           string     `gorm:"type:varchar(64);index:idx_auth_oidc_provider_candidate_key"`
-	DisplayName           string     `gorm:"type:varchar(255)"`
-	IssuerURL             string     `gorm:"type:varchar(512)"`
-	ClientID              string     `gorm:"type:varchar(512)"`
-	EncryptedClientSecret []byte
-	ClientSecretNonce     []byte
-	ClientSecretKeyID     string     `gorm:"type:varchar(64)"`
-	Scopes                string     `gorm:"type:text"`
-	Revision              uint64     `gorm:"not null"`
-	PromotedAt            *time.Time `gorm:"index"`
-	GrafanaTarget         string     `gorm:"type:varchar(32);not null;default:'none'"`
+	ProviderID            uint64              `gorm:"index:idx_auth_oidc_provider_candidate_provider"`
+	ProviderKey           string              `gorm:"type:varchar(64);index:idx_auth_oidc_provider_candidate_key"`
+	DisplayName           string              `gorm:"type:varchar(255)"`
+	IssuerURL             string              `gorm:"type:varchar(512)"`
+	ClientID              string              `gorm:"type:varchar(512)"`
+	EncryptedClientSecret []byte              `gorm:"type:blob"`
+	ClientSecretNonce     []byte              `gorm:"type:blob"`
+	ClientSecretKeyID     string              `gorm:"type:varchar(64)"`
+	Scopes                string              `gorm:"type:text"`
+	Revision              uint64              `gorm:"not null"`
+	PromotedAt            *time.Time          `gorm:"index"`
+	GrafanaTarget         GrafanaProviderKind `gorm:"type:varchar(32);not null;default:'none'"`
 }
 
 func (OIDCProviderCandidate) TableName() string { return "auth_oidc_provider_candidates" }
@@ -309,28 +326,35 @@ type UpdateDomainInput struct {
 }
 
 type OIDCProviderInput struct {
-	ProviderKey  string `json:"providerKey"`
-	DisplayName  string `json:"displayName"`
-	IssuerURL    string `json:"issuerUrl"`
-	ClientID     string `json:"clientId"`
-	ClientSecret string `json:"clientSecret"`
-	Scopes       string `json:"scopes"`
+	ProviderKey        string              `json:"providerKey"`
+	DisplayName        string              `json:"displayName"`
+	IssuerURL          string              `json:"issuerUrl"`
+	ClientID           string              `json:"clientId"`
+	ClientSecret       string              `json:"clientSecret"`
+	Scopes             string              `json:"scopes"`
+	GrafanaTarget      GrafanaProviderKind `json:"grafanaTarget"`
+	ConfirmDevLakeOnly bool                `json:"confirmDevlakeOnly"`
+	Revision           uint64              `json:"revision"`
 }
 
 type OIDCProviderResponse struct {
-	ProviderKey           string     `json:"providerKey"`
-	DisplayName           string     `json:"displayName"`
-	IssuerURL             string     `json:"issuerUrl"`
-	ClientID              string     `json:"clientId"`
-	Scopes                string     `json:"scopes"`
-	Enabled               bool       `json:"enabled"`
-	RetiredAt             *time.Time `json:"retiredAt,omitempty"`
-	SecretConfigured      bool       `json:"secretConfigured"`
-	DatabaseSourceActive  bool       `json:"databaseSourceActive"`
-	GrafanaSyncStatus     string     `json:"grafanaSyncStatus"`
-	GrafanaSyncedRevision uint64     `json:"grafanaSyncedRevision"`
-	ProviderRevision      uint64     `json:"providerRevision"`
-	DevLakeCallbackURL    string     `json:"devlakeCallbackUrl"`
-	GrafanaCallbackURL    string     `json:"grafanaCallbackUrl"`
-	AllowLocalOIDC        bool       `json:"allowLocalOidc"`
+	ProviderKey           string              `json:"providerKey"`
+	DisplayName           string              `json:"displayName"`
+	IssuerURL             string              `json:"issuerUrl"`
+	ClientID              string              `json:"clientId"`
+	Scopes                string              `json:"scopes"`
+	Enabled               bool                `json:"enabled"`
+	RetiredAt             *time.Time          `json:"retiredAt,omitempty"`
+	SecretConfigured      bool                `json:"secretConfigured"`
+	DatabaseSourceActive  bool                `json:"databaseSourceActive"`
+	GrafanaSyncStatus     string              `json:"grafanaSyncStatus"`
+	GrafanaSyncedRevision uint64              `json:"grafanaSyncedRevision"`
+	ProviderRevision      uint64              `json:"providerRevision"`
+	GrafanaTarget         GrafanaProviderKind `json:"grafanaTarget"`
+	DevLakeCallbackURL    string              `json:"devlakeCallbackUrl"`
+	GrafanaCallbackURL    string              `json:"grafanaCallbackUrl"`
+}
+
+type GrafanaLoginResponse struct {
+	URL string `json:"url"`
 }

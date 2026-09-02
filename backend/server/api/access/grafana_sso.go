@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-const grafanaSSOSettingsPath = "/api/v1/sso-settings/generic_oauth"
+const grafanaSSOSettingsPathPrefix = "/api/v1/sso-settings/"
 
 type GrafanaSSOSettings struct {
 	Name         string `json:"name"`
@@ -61,17 +61,20 @@ func NewGrafanaSSOClient(baseURL, username, password string, client *http.Client
 	return &GrafanaSSOClient{baseURL: baseURL, username: username, password: password, client: client}, nil
 }
 
-// PutGenericOAuth uses Grafana's documented SSO Settings API. Its errors are
+// PutProvider uses Grafana's documented SSO Settings API. Its errors are
 // deliberately classified without returning Grafana response bodies, which can
 // contain sensitive deployment details.
-func (c *GrafanaSSOClient) PutGenericOAuth(ctx context.Context, settings GrafanaSSOSettings) error {
+func (c *GrafanaSSOClient) PutProvider(ctx context.Context, provider GrafanaProviderKind, settings GrafanaSSOSettings) error {
+	if !isGrafanaSSOProvider(provider) {
+		return fmt.Errorf("unsupported Grafana SSO provider")
+	}
 	body, err := json.Marshal(struct {
 		Settings GrafanaSSOSettings `json:"settings"`
 	}{Settings: settings})
 	if err != nil {
 		return fmt.Errorf("encode Grafana SSO settings: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+grafanaSSOSettingsPath, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+grafanaSSOSettingsPathPrefix+string(provider), bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create Grafana SSO request: %w", err)
 	}
@@ -91,4 +94,13 @@ func (c *GrafanaSSOClient) PutGenericOAuth(ctx context.Context, settings Grafana
 		return fmt.Errorf("Grafana SSO request returned status %d", response.StatusCode)
 	}
 	return nil
+}
+
+func isGrafanaSSOProvider(provider GrafanaProviderKind) bool {
+	switch provider {
+	case GrafanaProviderGoogle, GrafanaProviderAzureAD, GrafanaProviderOkta, GrafanaProviderGitLab, GrafanaProviderGenericOAuth:
+		return true
+	default:
+		return false
+	}
 }

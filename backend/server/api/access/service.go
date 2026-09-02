@@ -26,7 +26,6 @@ import (
 	"github.com/apache/incubator-devlake/core/dal"
 	"github.com/apache/incubator-devlake/core/errors"
 	"github.com/apache/incubator-devlake/core/log"
-	"github.com/apache/incubator-devlake/helpers/oidchelper"
 )
 
 type Config struct {
@@ -80,10 +79,6 @@ func Init(basicRes context.BasicRes) {
 		)
 		if err == nil {
 			defaultService.grafanaSSO = grafanaClient
-		} else if defaultService.cfg.Enabled {
-			// The constructor error deliberately contains no supplied values. This
-			// warns operators without exposing backend-only Grafana credentials.
-			defaultService.logger.Warn(err, "access: Grafana SSO administration is unavailable; configure the private Grafana URL and management credentials")
 		}
 	})
 }
@@ -92,18 +87,17 @@ func (s *Service) oidcProviderCallbacks() (string, string, errors.Error) {
 	if s.cfg.AuthPublicURL == "" || s.cfg.GrafanaPublicURL == "" {
 		return "", "", errors.Unavailable.New("OIDC provider public URLs are not configured", errors.WithData(ErrCodeProviderBlocked))
 	}
-	return s.cfg.AuthPublicURL + authOIDCCallbackPath, s.cfg.GrafanaPublicURL + grafanaOIDCCallbackPath, nil
+	return s.cfg.AuthPublicURL + authOIDCCallbackPath, s.cfg.GrafanaPublicURL, nil
 }
 
 func (s *Service) decorateOIDCProviderResponse(response *OIDCProviderResponse) *OIDCProviderResponse {
 	if response == nil {
 		return nil
 	}
-	response.AllowLocalOIDC = oidchelper.AllowsLocalOIDCURL(s.cfg.AuthPublicURL)
-	devLakeCallbackURL, grafanaCallbackURL, err := s.oidcProviderCallbacks()
+	devLakeCallbackURL, grafanaPublicURL, err := s.oidcProviderCallbacks()
 	if err == nil {
 		response.DevLakeCallbackURL = devLakeCallbackURL
-		response.GrafanaCallbackURL = grafanaCallbackURL
+		response.GrafanaCallbackURL = grafanaPublicURL + grafanaLoginPath(response.GrafanaTarget)
 	}
 	return response
 }

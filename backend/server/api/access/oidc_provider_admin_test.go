@@ -17,13 +17,7 @@ limitations under the License.
 
 package access
 
-import (
-	"testing"
-
-	"github.com/apache/incubator-devlake/core/dal"
-	dalmocks "github.com/apache/incubator-devlake/mocks/core/dal"
-	"github.com/stretchr/testify/mock"
-)
+import "testing"
 
 func TestNormalizeOIDCProviderInput(t *testing.T) {
 	testCases := []struct {
@@ -51,6 +45,16 @@ func TestNormalizeOIDCProviderInput(t *testing.T) {
 			input:     OIDCProviderInput{ProviderKey: "google/oidc", DisplayName: "Google", IssuerURL: "https://accounts.example.com", ClientID: "client", Scopes: "openid"},
 			wantError: true,
 		},
+		{
+			name:      "requires confirmation for DevLake-only provider",
+			input:     OIDCProviderInput{ProviderKey: "custom", DisplayName: "Custom", IssuerURL: "https://accounts.example.com", ClientID: "client", Scopes: "openid", GrafanaTarget: GrafanaProviderNone},
+			wantError: true,
+		},
+		{
+			name:    "accepts confirmed DevLake-only provider",
+			input:   OIDCProviderInput{ProviderKey: "custom", DisplayName: "Custom", IssuerURL: "https://accounts.example.com", ClientID: "client", Scopes: "openid", GrafanaTarget: GrafanaProviderNone, ConfirmDevLakeOnly: true},
+			wantKey: "custom", wantScope: "openid",
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -73,25 +77,6 @@ func TestOIDCProviderResponseDoesNotExposeSecret(t *testing.T) {
 	response := oidcProviderResponse(provider, &OIDCProviderConfiguration{})
 	if !response.SecretConfigured {
 		t.Fatal("response should report configured secret")
-	}
-}
-
-func TestDecorateOIDCProviderResponseDerivesLocalOIDCCapability(t *testing.T) {
-	for _, testCase := range []struct {
-		name           string
-		publicURL      string
-		allowLocalOIDC bool
-	}{
-		{name: "local deployment", publicURL: "http://localhost:4000", allowLocalOIDC: true},
-		{name: "public deployment", publicURL: "https://devlake.example.com", allowLocalOIDC: false},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			service := &Service{cfg: Config{AuthPublicURL: testCase.publicURL, GrafanaPublicURL: "https://grafana.example.com"}}
-			response := service.decorateOIDCProviderResponse(&OIDCProviderResponse{})
-			if response.AllowLocalOIDC != testCase.allowLocalOIDC {
-				t.Fatalf("AllowLocalOIDC = %t, want %t", response.AllowLocalOIDC, testCase.allowLocalOIDC)
-			}
-		})
 	}
 }
 
@@ -141,25 +126,24 @@ func TestReuseOIDCProviderCredential(t *testing.T) {
 	}
 }
 
-func TestValidateOIDCProviderIdentity(t *testing.T) {
-	current := &OIDCProvider{ProviderKey: "google", IssuerURL: "https://accounts.google.com"}
+func TestValidateGrafanaProviderCompatibility(t *testing.T) {
 	testCases := []struct {
 		name      string
 		provider  *OIDCProvider
-		current   *OIDCProvider
 		wantError bool
 	}{
-		{name: "allows unchanged provider identity", provider: &OIDCProvider{ProviderKey: "google", IssuerURL: "https://accounts.google.com"}, current: current},
-		{name: "allows first provider identity", provider: &OIDCProvider{ProviderKey: "google", IssuerURL: "https://accounts.google.com"}},
-		{name: "rejects changed provider key", provider: &OIDCProvider{ProviderKey: "entra", IssuerURL: "https://accounts.google.com"}, current: current, wantError: true},
-		{name: "rejects changed issuer", provider: &OIDCProvider{ProviderKey: "google", IssuerURL: "https://login.microsoftonline.com"}, current: current, wantError: true},
+		{name: "allows Google issuer", provider: &OIDCProvider{IssuerURL: "https://accounts.google.com", GrafanaTarget: GrafanaProviderGoogle}},
+		{name: "allows Entra tenant issuer", provider: &OIDCProvider{IssuerURL: "https://login.microsoftonline.com/tenant/v2.0", GrafanaTarget: GrafanaProviderAzureAD}},
+		{name: "allows Okta issuer", provider: &OIDCProvider{IssuerURL: "https://customer.okta.com/oauth2/default", GrafanaTarget: GrafanaProviderOkta}},
+		{name: "rejects mismatched native target", provider: &OIDCProvider{IssuerURL: "https://accounts.google.com", GrafanaTarget: GrafanaProviderOkta}, wantError: true},
+		{name: "allows an arbitrary issuer for generic OAuth", provider: &OIDCProvider{IssuerURL: "https://issuer.example.com", GrafanaTarget: GrafanaProviderGenericOAuth}},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			err := validateOIDCProviderIdentity(testCase.provider, testCase.current)
+			err := validateGrafanaProviderCompatibility(testCase.provider)
 			if (err != nil) != testCase.wantError {
-				t.Fatalf("validateOIDCProviderIdentity() error = %v, wantError %t", err, testCase.wantError)
+				t.Fatalf("validateGrafanaProviderCompatibility() error = %v, wantError %t", err, testCase.wantError)
 			}
 		})
 	}
@@ -170,12 +154,16 @@ func TestOIDCProviderResponseIncludesDeploymentDerivedCallbacks(t *testing.T) {
 		AuthPublicURL:    "https://devlake.example.com",
 		GrafanaPublicURL: "https://grafana.example.com",
 	}}
-	response := service.decorateOIDCProviderResponse(&OIDCProviderResponse{})
+	response := service.decorateOIDCProviderResponse(&OIDCProviderResponse{GrafanaTarget: GrafanaProviderGenericOAuth})
 	if response.DevLakeCallbackURL != "https://devlake.example.com/api/auth/callback" {
 		t.Fatalf("DevLake callback = %q", response.DevLakeCallbackURL)
 	}
 	if response.GrafanaCallbackURL != "https://grafana.example.com/login/generic_oauth" {
 		t.Fatalf("Grafana callback = %q", response.GrafanaCallbackURL)
+	}
+	response = service.decorateOIDCProviderResponse(&OIDCProviderResponse{GrafanaTarget: GrafanaProviderGoogle})
+	if response.GrafanaCallbackURL != "https://grafana.example.com/login/google" {
+		t.Fatalf("Google Grafana callback = %q", response.GrafanaCallbackURL)
 	}
 }
 
@@ -186,21 +174,19 @@ func TestOIDCProviderCallbacksRequireDeploymentOrigins(t *testing.T) {
 	}
 }
 
-func TestFindReusableRetiredOIDCProvider(t *testing.T) {
-	db := dalmocks.NewDal(t)
-	db.EXPECT().All(mock.Anything, mock.Anything).Run(func(dst interface{}, _ ...dal.Clause) {
-		providers := dst.(*[]OIDCProvider)
-		*providers = []OIDCProvider{{ProviderKey: "google", IssuerURL: "https://accounts.google.com"}}
-	}).Return(nil)
-
-	provider, err := (&Service{db: db}).findReusableRetiredOIDCProvider(&OIDCProvider{
-		ProviderKey: "google",
-		IssuerURL:   "https://accounts.google.com",
-	})
-	if err != nil {
-		t.Fatalf("findReusableRetiredOIDCProvider() error = %v", err)
+func TestGrafanaLoginPath(t *testing.T) {
+	testCases := []struct {
+		target GrafanaProviderKind
+		want   string
+	}{
+		{target: GrafanaProviderGoogle, want: "/login/google"},
+		{target: GrafanaProviderAzureAD, want: "/login/azuread"},
+		{target: GrafanaProviderGenericOAuth, want: "/login/generic_oauth"},
+		{target: GrafanaProviderNone, want: "/login"},
 	}
-	if provider == nil || provider.ProviderKey != "google" || provider.IssuerURL != "https://accounts.google.com" {
-		t.Fatalf("findReusableRetiredOIDCProvider() = %#v, want matching retired provider", provider)
+	for _, testCase := range testCases {
+		if actual := grafanaLoginPath(testCase.target); actual != testCase.want {
+			t.Fatalf("grafanaLoginPath(%q) = %q, want %q", testCase.target, actual, testCase.want)
+		}
 	}
 }

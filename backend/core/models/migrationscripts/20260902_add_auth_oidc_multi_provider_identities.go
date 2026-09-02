@@ -80,6 +80,7 @@ type authAccessUserIdentitySource20260902 struct {
 func (authAccessUserIdentitySource20260902) TableName() string { return "auth_access_users" }
 
 type authOIDCProviderMulti20260902 struct {
+	Revision              uint64 `gorm:"not null;default:0"`
 	GrafanaTarget         string `gorm:"type:varchar(32);not null;default:'none';index:idx_auth_oidc_provider_grafana_target"`
 	GrafanaSyncStatus     string `gorm:"type:varchar(32);not null;default:'pending'"`
 	GrafanaSyncedRevision uint64 `gorm:"not null;default:0"`

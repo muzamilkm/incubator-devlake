@@ -99,6 +99,7 @@ func RegisterRouter(r *gin.Engine, basicRes context.BasicRes) {
 
 	// fork-owned native OIDC access directory
 	r.GET("/access/me", access.GetCurrent)
+	r.GET("/access/grafana-login", access.GetGrafanaLogin)
 	r.GET("/access/users", access.ListUsers)
 	r.POST("/access/users", access.PostUser)
 	r.PATCH("/access/users/:id", access.PatchUser)
@@ -109,6 +110,7 @@ func RegisterRouter(r *gin.Engine, basicRes context.BasicRes) {
 	r.POST("/access/domains/:id/hide", access.HideDomain)
 	r.GET("/access/audit-events", access.ListAuditEvents)
 	r.GET("/access/oidc-provider", access.GetOIDCProvider)
+	r.GET("/access/oidc-providers", access.ListOIDCProviders)
 	r.POST("/access/oidc-provider/validate", access.ValidateOIDCProvider)
 	r.PUT("/access/oidc-provider", access.PutOIDCProvider)
 	r.POST("/access/oidc-provider/activate", access.ActivateOIDCProvider)
@@ -116,6 +118,12 @@ func RegisterRouter(r *gin.Engine, basicRes context.BasicRes) {
 	r.POST("/access/oidc-provider/disable", access.DisableOIDCProvider)
 	r.DELETE("/access/oidc-provider", access.RetireOIDCProvider)
 	r.POST("/access/oidc-provider/grafana/retry", access.RetryGrafanaOIDCProviderSync)
+	r.POST("/access/oidc-providers/:providerKey/activate", access.ActivateOIDCProviderByKey)
+	r.POST("/access/oidc-providers/:providerKey/enable", access.EnableOIDCProviderByKey)
+	r.POST("/access/oidc-providers/:providerKey/disable", access.DisableOIDCProviderByKey)
+	r.DELETE("/access/oidc-providers/:providerKey", access.RetireOIDCProviderByKey)
+	r.POST("/access/oidc-providers/:providerKey/grafana/retry", access.RetryGrafanaOIDCProviderSyncByKey)
+	r.POST("/access/oidc-providers/:providerKey/grafana/select-generic", access.SelectGenericOIDCProvider)
 
 	// user project mapping api
 	r.GET("/user-project-mappings", userprojectmapping.GetAllMappings)

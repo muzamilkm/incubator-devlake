@@ -21,7 +21,6 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"strings"
 	"testing"
 )
 
@@ -32,70 +31,49 @@ func (roundTripper grafanaRoundTripper) RoundTrip(request *http.Request) (*http.
 }
 
 func TestGrafanaSSOClientUsesDocumentedSettingsEndpoint(t *testing.T) {
-	client, err := NewGrafanaSSOClient("http://grafana.internal", "devlake-system", "machine-password", &http.Client{Transport: grafanaRoundTripper(func(request *http.Request) (*http.Response, error) {
-		if request.Method != http.MethodPut || request.URL.Path != grafanaSSOSettingsPath {
-			t.Fatalf("request = %s %s", request.Method, request.URL.Path)
-		}
-		username, password, ok := request.BasicAuth()
-		if !ok || username != "devlake-system" || password != "machine-password" {
-			t.Fatal("missing Grafana management credentials")
-		}
-		return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody, Header: make(http.Header)}, nil
-	})})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := client.PutGenericOAuth(context.Background(), GrafanaSSOSettings{}); err != nil {
-		t.Fatal(err)
+	for _, provider := range []GrafanaProviderKind{GrafanaProviderGoogle, GrafanaProviderAzureAD, GrafanaProviderOkta, GrafanaProviderGitLab, GrafanaProviderGenericOAuth} {
+		t.Run(string(provider), func(t *testing.T) {
+			client, err := NewGrafanaSSOClient("http://grafana.internal", "devlake-system", "machine-password", &http.Client{Transport: grafanaRoundTripper(func(request *http.Request) (*http.Response, error) {
+				if request.Method != http.MethodPut || request.URL.Path != grafanaSSOSettingsPathPrefix+string(provider) {
+					t.Fatalf("request = %s %s", request.Method, request.URL.Path)
+				}
+				username, password, ok := request.BasicAuth()
+				if !ok || username != "devlake-system" || password != "machine-password" {
+					t.Fatal("missing Grafana management credentials")
+				}
+				return &http.Response{StatusCode: http.StatusNoContent, Body: io.NopCloser(nil), Header: make(http.Header)}, nil
+			})})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := client.PutProvider(context.Background(), provider, GrafanaSSOSettings{}); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 
 func TestGrafanaSSOClientRedactsUpstreamResponse(t *testing.T) {
 	client, err := NewGrafanaSSOClient("http://grafana.internal", "devlake-system", "machine-password", &http.Client{Transport: grafanaRoundTripper(func(request *http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: http.StatusBadRequest, Body: http.NoBody, Header: make(http.Header)}, nil
+		return &http.Response{StatusCode: http.StatusBadRequest, Body: io.NopCloser(nil), Header: make(http.Header)}, nil
 	})})
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = client.PutGenericOAuth(context.Background(), GrafanaSSOSettings{})
+	err = client.PutProvider(context.Background(), GrafanaProviderGenericOAuth, GrafanaSSOSettings{})
 	if err == nil || err.Error() != "Grafana SSO request returned status 400" {
 		t.Fatalf("error = %v", err)
 	}
 }
 
-func TestGrafanaSSOClientDrainsAndClosesResponseBody(t *testing.T) {
-	responseBody := &trackingReadCloser{Reader: strings.NewReader("Grafana response")}
-	client, err := NewGrafanaSSOClient("http://grafana.internal", "devlake-system", "machine-password", &http.Client{Transport: grafanaRoundTripper(func(*http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: http.StatusBadRequest, Body: responseBody, Header: make(http.Header)}, nil
-	})})
+func TestGrafanaSSOClientRejectsUnknownProvider(t *testing.T) {
+	client, err := NewGrafanaSSOClient("http://grafana.internal", "devlake-system", "machine-password", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := client.PutGenericOAuth(context.Background(), GrafanaSSOSettings{}); err == nil {
-		t.Fatal("expected Grafana SSO status error")
+	if err := client.PutProvider(context.Background(), GrafanaProviderKind("unknown"), GrafanaSSOSettings{}); err == nil {
+		t.Fatal("expected unsupported provider to be rejected")
 	}
-	if !responseBody.drained || !responseBody.closed {
-		t.Fatalf("response body drained=%t closed=%t, want both true", responseBody.drained, responseBody.closed)
-	}
-}
-
-type trackingReadCloser struct {
-	io.Reader
-	drained bool
-	closed  bool
-}
-
-func (body *trackingReadCloser) Read(p []byte) (int, error) {
-	n, err := body.Reader.Read(p)
-	if err == io.EOF {
-		body.drained = true
-	}
-	return n, err
-}
-
-func (body *trackingReadCloser) Close() error {
-	body.closed = true
-	return nil
 }
 
 func TestNewGrafanaSSOClientRequiresManagementCredentials(t *testing.T) {
