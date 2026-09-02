@@ -40,6 +40,9 @@ export const ACCESS_ERROR_CODE = {
   INVALID_OIDC_PROVIDER: 'INVALID_OIDC_PROVIDER',
   OIDC_PROVIDER_BLOCKED: 'OIDC_PROVIDER_BLOCKED',
   OIDC_PROVIDER_MISSING: 'OIDC_PROVIDER_MISSING',
+  OIDC_PROVIDER_REVISION_CONFLICT: 'OIDC_PROVIDER_REVISION_CONFLICT',
+  GRAFANA_TARGET_CONFLICT: 'GRAFANA_TARGET_CONFLICT',
+  OIDC_IDENTITY_LINKED: 'OIDC_IDENTITY_LINKED',
 } as const;
 
 export type AccessErrorCode = (typeof ACCESS_ERROR_CODE)[keyof typeof ACCESS_ERROR_CODE];
@@ -89,9 +92,21 @@ export const OIDC_PROVIDER_SYNC_STATUS = {
   FAILED: 'failed',
   COMPENSATED: 'compensated',
   COMPENSATION_FAILED: 'compensation_failed',
+  NOT_APPLICABLE: 'not_applicable',
 } as const;
 
 export type OIDCProviderSyncStatus = (typeof OIDC_PROVIDER_SYNC_STATUS)[keyof typeof OIDC_PROVIDER_SYNC_STATUS];
+
+export const GRAFANA_PROVIDER_KIND = {
+  NONE: 'none',
+  GOOGLE: 'google',
+  AZURE_AD: 'azuread',
+  OKTA: 'okta',
+  GITLAB: 'gitlab',
+  GENERIC_OAUTH: 'generic_oauth',
+} as const;
+
+export type GrafanaProviderKind = (typeof GRAFANA_PROVIDER_KIND)[keyof typeof GRAFANA_PROVIDER_KIND];
 
 export type OIDCProviderInput = {
   providerKey: string;
@@ -100,18 +115,29 @@ export type OIDCProviderInput = {
   clientId: string;
   clientSecret: string;
   scopes: string;
+  grafanaTarget: GrafanaProviderKind;
+  confirmDevlakeOnly: boolean;
+  revision?: number;
 };
 
-export type OIDCProvider = Omit<OIDCProviderInput, 'clientSecret'> & {
+export type OIDCProvider = Omit<OIDCProviderInput, 'clientSecret' | 'confirmDevlakeOnly' | 'revision'> & {
   enabled: boolean;
+  retiredAt?: string;
   secretConfigured: boolean;
   databaseSourceActive: boolean;
   grafanaSyncStatus: OIDCProviderSyncStatus;
   grafanaSyncedRevision: number;
   providerRevision: number;
+  hasCandidate: boolean;
   devlakeCallbackUrl: string;
   grafanaCallbackUrl: string;
   allowLocalOidc: boolean;
+};
+
+export type LinkableOIDCProvider = Pick<OIDCProvider, 'providerKey' | 'displayName'>;
+
+export type GrafanaLogin = {
+  url: string;
 };
 
 export type AccessPagination = {
@@ -153,11 +179,23 @@ export const hideDomain = (id: ID): Promise<AccessDomain> =>
   request(`${basePath}/domains/${id}/hide`, { method: 'POST' });
 export const listAuditEvents = (): Promise<AccessAuditEvent[]> => request(`${basePath}/audit-events`);
 export const getOIDCProvider = (): Promise<OIDCProvider> => request(`${basePath}/oidc-provider`);
+export const listOIDCProviders = (): Promise<OIDCProvider[]> => request(`${basePath}/oidc-providers`);
+export const listLinkableOIDCProviders = (): Promise<LinkableOIDCProvider[]> =>
+  request(`${basePath}/oidc-providers/linkable`);
 export const validateOIDCProvider = (data: OIDCProviderInput): Promise<void> =>
   request(`${basePath}/oidc-provider/validate`, { method: 'POST', data });
 export const saveOIDCProvider = (data: OIDCProviderInput): Promise<OIDCProvider> =>
   request(`${basePath}/oidc-provider`, { method: 'PUT', data });
-export const activateOIDCProvider = (): Promise<OIDCProvider> =>
-  request(`${basePath}/oidc-provider/activate`, { method: 'POST' });
-export const retryGrafanaOIDCProviderSync = (): Promise<OIDCProvider> =>
-  request(`${basePath}/oidc-provider/grafana/retry`, { method: 'POST' });
+export const activateOIDCProvider = (providerKey: string): Promise<OIDCProvider> =>
+  request(`${basePath}/oidc-providers/${encodeURIComponent(providerKey)}/activate`, { method: 'POST' });
+export const enableOIDCProvider = (providerKey: string): Promise<OIDCProvider> =>
+  request(`${basePath}/oidc-providers/${encodeURIComponent(providerKey)}/enable`, { method: 'POST' });
+export const disableOIDCProvider = (providerKey: string): Promise<OIDCProvider> =>
+  request(`${basePath}/oidc-providers/${encodeURIComponent(providerKey)}/disable`, { method: 'POST' });
+export const retireOIDCProvider = (providerKey: string): Promise<OIDCProvider> =>
+  request(`${basePath}/oidc-providers/${encodeURIComponent(providerKey)}`, { method: 'DELETE' });
+export const retryGrafanaOIDCProviderSync = (providerKey: string): Promise<OIDCProvider> =>
+  request(`${basePath}/oidc-providers/${encodeURIComponent(providerKey)}/grafana/retry`, { method: 'POST' });
+export const selectGenericOIDCProvider = (providerKey: string): Promise<OIDCProvider> =>
+  request(`${basePath}/oidc-providers/${encodeURIComponent(providerKey)}/grafana/select-generic`, { method: 'POST' });
+export const getGrafanaLogin = (): Promise<GrafanaLogin> => request(`${basePath}/grafana-login`);

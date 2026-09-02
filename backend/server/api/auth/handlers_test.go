@@ -297,8 +297,8 @@ func TestLinkIdentityFlowBindsStateToAuthenticatedUserAndProvider(t *testing.T) 
 	if callbackResponse.Code != http.StatusSeeOther {
 		t.Fatalf("link callback: expected 303, got %d: %s", callbackResponse.Code, callbackResponse.Body.String())
 	}
-	if callbackResponse.Header().Get("Location") != "/access" {
-		t.Fatalf("link callback location = %q, want /access", callbackResponse.Header().Get("Location"))
+	if callbackResponse.Header().Get("Location") != "/access?identity_link=linked" {
+		t.Fatalf("link callback location = %q, want successful link return", callbackResponse.Header().Get("Location"))
 	}
 	if authorizer.linkProvider != "test" || authorizer.linkedProvider != "test" || authorizer.linkedStateID != authorizer.linkStateID {
 		t.Fatalf("link binding = start provider=%q callback provider=%q state=%q", authorizer.linkProvider, authorizer.linkedProvider, authorizer.linkedStateID)

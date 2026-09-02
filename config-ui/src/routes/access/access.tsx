@@ -56,9 +56,9 @@ export const Access = () => {
       API.access.listDomains({ page: domainPage, pageSize: domainPageSize }),
       API.access.listAuditEvents(),
       API.access
-        .getOIDCProvider()
-        .then((provider) => ({ provider, loadFailed: false }))
-        .catch(() => ({ provider: undefined, loadFailed: true })),
+        .listOIDCProviders()
+        .then((providers) => ({ providers, loadFailed: false }))
+        .catch(() => ({ providers: [], loadFailed: true })),
     ]);
     return { users, domains, auditEvents, providerResult };
   }, [version, userPage, userPageSize, domainPage, domainPageSize]);
@@ -234,7 +234,7 @@ export const Access = () => {
       />
 
       <Authentication
-        provider={data?.providerResult.provider}
+        providers={data?.providerResult.providers ?? []}
         loadFailed={data?.providerResult.loadFailed ?? false}
         onRefresh={refresh}
       />

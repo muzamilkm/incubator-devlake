@@ -100,6 +100,7 @@ func RegisterRouter(r *gin.Engine, basicRes context.BasicRes) {
 	// fork-owned native OIDC access directory
 	r.GET("/access/me", access.GetCurrent)
 	r.GET("/access/grafana-login", access.GetGrafanaLogin)
+	r.GET("/access/oidc-providers/linkable", access.ListLinkableOIDCProviders)
 	r.GET("/access/users", access.ListUsers)
 	r.POST("/access/users", access.PostUser)
 	r.PATCH("/access/users/:id", access.PatchUser)

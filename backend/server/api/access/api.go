@@ -102,6 +102,25 @@ func GetGrafanaLogin(c *gin.Context) {
 	shared.ApiOutputSuccess(c, response, http.StatusOK)
 }
 
+func ListLinkableOIDCProviders(c *gin.Context) {
+	service := Default()
+	if service == nil || !service.Enabled() {
+		outputError(c, errors.Unauthorized.New("native OIDC authentication is required"))
+		return
+	}
+	identity, ok := GetIdentity(c)
+	if !ok {
+		outputError(c, errors.Unauthorized.New("native OIDC authentication is required"))
+		return
+	}
+	providers, err := service.LinkableOIDCProviders(identity)
+	if err != nil {
+		outputError(c, err)
+		return
+	}
+	shared.ApiOutputSuccess(c, providers, http.StatusOK)
+}
+
 func ListUsers(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
 		return

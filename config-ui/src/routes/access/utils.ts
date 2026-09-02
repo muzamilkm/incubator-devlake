@@ -20,6 +20,7 @@ import axios, { HttpStatusCode } from 'axios';
 
 import {
   ACCESS_ERROR_CODE,
+  GRAFANA_PROVIDER_KIND,
   OIDC_PROVIDER_SYNC_STATUS,
   type AccessApiErrorResponse,
   type OIDCProvider,
@@ -36,6 +37,8 @@ export const ACCESS_ERROR = {
   INVALID_OIDC_PROVIDER: 'Enter valid OIDC provider settings and include the openid scope.',
   OIDC_PROVIDER_BLOCKED: 'OIDC provider settings cannot be applied until the deployment prerequisites are available.',
   OIDC_PROVIDER_FAILED: 'OIDC provider settings could not be completed. Please try again.',
+  OIDC_PROVIDER_STALE: 'This provider changed. Refresh the page before saving it.',
+  GRAFANA_TARGET_CONFLICT: 'Another provider already controls this Grafana sign-in option.',
 } as const;
 
 export const normalizeDomain = (value: string) => value.trim().toLowerCase();
@@ -111,6 +114,9 @@ export const normalizeOIDCProviderInput = (provider: OIDCProviderInput): OIDCPro
     .filter(Boolean)
     .filter((scope, index, scopes) => scopes.indexOf(scope) === index)
     .join(' '),
+  grafanaTarget: provider.grafanaTarget,
+  confirmDevlakeOnly: provider.confirmDevlakeOnly,
+  revision: provider.revision,
 });
 
 export const formFromOIDCProvider = (provider?: OIDCProvider): OIDCProviderInput => ({
@@ -120,13 +126,12 @@ export const formFromOIDCProvider = (provider?: OIDCProvider): OIDCProviderInput
   clientId: provider?.clientId ?? '',
   clientSecret: '',
   scopes: provider?.scopes ?? 'openid profile email',
+  grafanaTarget: provider?.grafanaTarget ?? GRAFANA_PROVIDER_KIND.NONE,
+  confirmDevlakeOnly: provider?.grafanaTarget === GRAFANA_PROVIDER_KIND.NONE,
+  revision: provider?.providerRevision,
 });
 
-export const isValidOIDCProviderInput = (
-  provider: OIDCProviderInput,
-  configuredProvider?: OIDCProvider,
-  allowLocalOidc = false,
-) => {
+export const isValidOIDCProviderInput = (provider: OIDCProviderInput, configuredProvider?: OIDCProvider) => {
   const normalized = normalizeOIDCProviderInput(provider);
   let issuer: URL;
   try {
@@ -143,8 +148,9 @@ export const isValidOIDCProviderInput = (
     normalized.displayName.length > 0 &&
     normalized.clientId.length > 0 &&
     (!requiresReplacementSecret || normalized.clientSecret.length > 0) &&
-    (issuer.protocol === 'https:' || (allowLocalOidc && isLocalHTTP)) &&
-    normalized.scopes.split(' ').includes('openid')
+    (issuer.protocol === 'https:' || isLocalHTTP) &&
+    normalized.scopes.split(' ').includes('openid') &&
+    (normalized.grafanaTarget !== GRAFANA_PROVIDER_KIND.NONE || normalized.confirmDevlakeOnly)
   );
 };
 
@@ -154,33 +160,30 @@ export const getOIDCProviderError = (error: unknown) => {
   if (code === ACCESS_ERROR_CODE.OIDC_PROVIDER_BLOCKED || code === ACCESS_ERROR_CODE.OIDC_PROVIDER_MISSING) {
     return ACCESS_ERROR.OIDC_PROVIDER_BLOCKED;
   }
+  if (code === ACCESS_ERROR_CODE.OIDC_PROVIDER_REVISION_CONFLICT) return ACCESS_ERROR.OIDC_PROVIDER_STALE;
+  if (code === ACCESS_ERROR_CODE.GRAFANA_TARGET_CONFLICT) return ACCESS_ERROR.GRAFANA_TARGET_CONFLICT;
   return ACCESS_ERROR.OIDC_PROVIDER_FAILED;
 };
 
 export const getOIDCProviderStatus = (provider?: OIDCProvider) => {
-  if (!provider?.providerKey) return OIDC_PROVIDER_STATUS.ENVIRONMENT;
+  if (!provider) return OIDC_PROVIDER_STATUS.CONFIGURED;
+  if (provider.retiredAt) return OIDC_PROVIDER_STATUS.RETIRED;
   if (provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.COMPENSATION_FAILED)
     return OIDC_PROVIDER_STATUS.RECOVERY;
-  if (provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.COMPENSATED) return OIDC_PROVIDER_STATUS.COMPENSATED;
   if (provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.FAILED) return OIDC_PROVIDER_STATUS.FAILED;
-  if (!provider.databaseSourceActive) {
-    return provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.SYNCHRONIZED
-      ? OIDC_PROVIDER_STATUS.CONFIGURED
-      : OIDC_PROVIDER_STATUS.SYNCHRONIZING;
-  }
-  if (provider.providerRevision > provider.grafanaSyncedRevision || !provider.enabled)
-    return OIDC_PROVIDER_STATUS.PENDING;
+  if (!provider.enabled) return OIDC_PROVIDER_STATUS.DISABLED;
+  if (provider.grafanaTarget === GRAFANA_PROVIDER_KIND.NONE) return OIDC_PROVIDER_STATUS.DEVLAKE_ONLY;
+  if (provider.providerRevision > provider.grafanaSyncedRevision) return OIDC_PROVIDER_STATUS.PENDING;
   return OIDC_PROVIDER_STATUS.ACTIVE;
 };
 
 export const canActivateOIDCProvider = (provider?: OIDCProvider) => {
   if (!provider?.providerKey || provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.COMPENSATION_FAILED)
     return false;
-  if (!provider.databaseSourceActive) {
-    return (
-      provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.SYNCHRONIZED ||
-      provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.COMPENSATED
-    );
-  }
-  return provider.providerRevision > provider.grafanaSyncedRevision;
+  return !provider.databaseSourceActive || provider.hasCandidate;
 };
+
+export const canSelectGenericOIDCProvider = (provider: OIDCProvider) =>
+  provider.enabled &&
+  provider.grafanaTarget === GRAFANA_PROVIDER_KIND.NONE &&
+  provider.grafanaSyncStatus !== OIDC_PROVIDER_SYNC_STATUS.COMPENSATION_FAILED;

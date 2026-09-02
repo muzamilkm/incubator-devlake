@@ -63,7 +63,9 @@ func (s *Service) GetOIDCProviders() ([]*OIDCProviderResponse, errors.Error) {
 		if _, candidate, candidateErr := s.currentOIDCProvider(provider.ProviderKey); candidateErr != nil {
 			return nil, candidateErr
 		} else if candidate != nil {
-			responses = append(responses, oidcProviderResponse(effectiveOIDCProvider(provider, candidate), configuration))
+			response := oidcProviderResponse(effectiveOIDCProvider(provider, candidate), configuration)
+			response.HasCandidate = true
+			responses = append(responses, response)
 			continue
 		}
 		responses = append(responses, oidcProviderResponse(provider, configuration))

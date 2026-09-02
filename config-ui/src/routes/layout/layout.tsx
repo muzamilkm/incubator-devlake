@@ -19,10 +19,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLoaderData, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
-import { Layout as AntdLayout, Menu, Divider, Dropdown, Button } from 'antd';
+import { Layout as AntdLayout, Menu, Divider, Dropdown, Button, message } from 'antd';
 import { UserOutlined, LogoutOutlined } from '@ant-design/icons';
+import type { MenuProps } from 'antd';
 
 import API from '@/api';
+import { DEVLAKE_ENDPOINT } from '@/config';
 import { PageLoading, Logo, ExternalLink } from '@/components';
 import { init, selectError, selectStatus } from '@/features';
 import { OnboardCard } from '@/routes/onboard/components';
@@ -30,7 +32,7 @@ import { OtelAttention } from '@/routes/otel/attention';
 import { useAppDispatch, useAppSelector } from '@/hooks';
 
 import { ACCESS_PATH, menuItems, menuItemsMatch, headerItems } from './config';
-import type { AccessCurrent } from '@/api/access';
+import type { AccessCurrent, LinkableOIDCProvider } from '@/api/access';
 import { canManageAccess } from '@/routes/access/guard';
 
 const { Sider, Header, Content, Footer } = AntdLayout;
@@ -40,6 +42,8 @@ const brandName = import.meta.env.DEVLAKE_BRAND_NAME ?? 'DevLake';
 export const Layout = () => {
   const [openKeys, setOpenKeys] = useState<string[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [linkableProviders, setLinkableProviders] = useState<LinkableOIDCProvider[]>();
+  const [linkProvidersFailed, setLinkProvidersFailed] = useState(false);
 
   const { version, plugins, user, access } = useLoaderData() as {
     version: string;
@@ -65,6 +69,51 @@ export const Layout = () => {
     }
     window.location.href = '/login';
   };
+
+  const openDashboard = async () => {
+    try {
+      const { url } = await API.access.getGrafanaLogin();
+      window.location.assign(url);
+    } catch {
+      window.location.assign('/grafana/');
+    }
+  };
+
+  const loadLinkableProviders = (open: boolean) => {
+    if (!open || !user?.authenticated || !access?.enabled || linkableProviders) return;
+    API.access
+      .listLinkableOIDCProviders()
+      .then((providers) => {
+        setLinkableProviders(providers);
+        setLinkProvidersFailed(false);
+      })
+      .catch(() => setLinkProvidersFailed(true));
+  };
+
+  const startIdentityLink = (providerKey: string) => {
+    const returnURL = `${window.location.pathname}${window.location.search}`;
+    window.location.assign(
+      `${DEVLAKE_ENDPOINT}/auth/link-identity?provider=${encodeURIComponent(
+        providerKey,
+      )}&return_url=${encodeURIComponent(returnURL)}`,
+    );
+  };
+
+  const accountMenuItems: MenuProps['items'] = [
+    ...(linkableProviders?.map((provider) => ({
+      key: `link-identity-${provider.providerKey}`,
+      label: `Add ${provider.displayName} sign-in`,
+      onClick: () => startIdentityLink(provider.providerKey),
+    })) ?? []),
+    ...(linkableProviders?.length === 0
+      ? [{ key: 'no-linkable-providers', disabled: true, label: 'No additional sign-in providers' }]
+      : []),
+    ...(linkProvidersFailed
+      ? [{ key: 'linkable-providers-failed', disabled: true, label: 'Additional sign-in methods are unavailable' }]
+      : []),
+    { type: 'divider' },
+    { key: 'logout', icon: <LogoutOutlined />, label: 'Sign out', onClick: handleLogout },
+  ];
 
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -96,6 +145,20 @@ export const Layout = () => {
       }
     }, [] as string[]);
     setSelectedKeys(selectedKeys);
+  }, [pathname]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const identityLinkResult = params.get('identity_link');
+    if (!identityLinkResult) return;
+    if (identityLinkResult === 'linked') {
+      message.success('Additional sign-in method added.');
+    } else {
+      message.error('The additional sign-in method could not be added. Please try again.');
+    }
+    params.delete('identity_link');
+    const query = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
   }, [pathname]);
 
   const title = useMemo(() => {
@@ -156,28 +219,29 @@ export const Layout = () => {
               import.meta.env.DEVLAKE_COPYRIGHT_HIDE ? !['Dashboards', 'GitHub', 'Slack'].includes(item.label) : true,
             )
             .map((item, i, arr) => (
-              <ExternalLink key={item.label} link={item.link} style={{ display: 'flex', alignItems: 'center' }}>
-                {item.icon}
-                <span style={{ marginLeft: 4 }}>{item.label}</span>
+              <span key={item.label} style={{ display: 'flex', alignItems: 'center' }}>
+                {item.dashboard ? (
+                  <Button
+                    type="link"
+                    onClick={openDashboard}
+                    style={{ display: 'flex', alignItems: 'center', padding: 0 }}
+                  >
+                    {item.icon}
+                    <span style={{ marginLeft: 4 }}>{item.label}</span>
+                  </Button>
+                ) : (
+                  <ExternalLink link={item.link} style={{ display: 'flex', alignItems: 'center' }}>
+                    {item.icon}
+                    <span style={{ marginLeft: 4 }}>{item.label}</span>
+                  </ExternalLink>
+                )}
                 {i !== arr.length - 1 && <Divider type="vertical" />}
-              </ExternalLink>
+              </span>
             ))}
           {user?.authenticated && (
             <>
               <Divider type="vertical" />
-              <Dropdown
-                menu={{
-                  items: [
-                    {
-                      key: 'logout',
-                      icon: <LogoutOutlined />,
-                      label: 'Sign out',
-                      onClick: handleLogout,
-                    },
-                  ],
-                }}
-                placement="bottomRight"
-              >
+              <Dropdown menu={{ items: accountMenuItems }} placement="bottomRight" onOpenChange={loadLinkableProviders}>
                 <Button type="text" icon={<UserOutlined />}>
                   {user.name || user.email || 'Account'}
                 </Button>

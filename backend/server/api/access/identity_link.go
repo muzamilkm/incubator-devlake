@@ -26,6 +26,36 @@ import (
 	"github.com/apache/incubator-devlake/core/errors"
 )
 
+// LinkableOIDCProviders returns enabled providers that are not already linked
+// to the authenticated access user. Provider selection remains server-owned:
+// callers can start linking only with one of these non-secret provider keys.
+func (s *Service) LinkableOIDCProviders(identity Identity) ([]LinkableOIDCProviderResponse, errors.Error) {
+	principal, err := s.AuthorizeSession(identity)
+	if err != nil {
+		return nil, err
+	}
+	identities := make([]AccessIdentity, 0)
+	if err := s.db.All(&identities, dal.Where("access_user_id = ?", principal.UserID)); err != nil {
+		return nil, errors.Default.Wrap(err, "error reading linked OIDC identities")
+	}
+	linkedIssuers := make(map[string]struct{}, len(identities))
+	for _, linkedIdentity := range identities {
+		linkedIssuers[linkedIdentity.Issuer] = struct{}{}
+	}
+	providers := make([]OIDCProvider, 0)
+	if err := s.db.All(&providers, dal.Where("enabled = ? AND retired_at IS NULL", true), dal.Orderby("provider_key ASC")); err != nil {
+		return nil, errors.Default.Wrap(err, "error reading enabled OIDC providers")
+	}
+	linkable := make([]LinkableOIDCProviderResponse, 0, len(providers))
+	for _, provider := range providers {
+		if _, linked := linkedIssuers[provider.IssuerURL]; linked {
+			continue
+		}
+		linkable = append(linkable, LinkableOIDCProviderResponse{ProviderKey: provider.ProviderKey, DisplayName: provider.DisplayName})
+	}
+	return linkable, nil
+}
+
 const identityLinkStateLifetime = 10 * time.Minute
 
 // BeginIdentityLink creates the server-side half of a fresh provider-bound OIDC

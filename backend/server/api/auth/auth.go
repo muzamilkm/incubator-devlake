@@ -414,15 +414,16 @@ func (s *Service) Callback(c *gin.Context) {
 	identity := access.Identity{Issuer: cfg.Providers[state.Provider].IssuerURL, Subject: sub, Email: email, DisplayName: name}
 	if state.IdentityLinkStateID != "" {
 		if s.access == nil || !s.access.Enabled() {
-			fail(c, http.StatusForbidden, "identity linking is not enabled", nil)
+			c.Redirect(http.StatusSeeOther, identityLinkReturnURL(state.ReturnURL, "failed"))
 			return
 		}
 		if linkErr := s.access.CompleteIdentityLink(state.IdentityLinkStateID, state.Provider, identity); linkErr != nil {
-			fail(c, linkErr.GetType().GetHttpCode(), "identity link failed", linkErr)
+			s.logger.Info("oidc identity link denied: provider=%s", state.Provider)
+			c.Redirect(http.StatusSeeOther, identityLinkReturnURL(state.ReturnURL, "failed"))
 			return
 		}
 		s.logger.Info("oidc identity linked: provider=%s", state.Provider)
-		c.Redirect(http.StatusSeeOther, state.ReturnURL)
+		c.Redirect(http.StatusSeeOther, identityLinkReturnURL(state.ReturnURL, "linked"))
 		return
 	}
 	if accessService := s.access; accessService != nil && accessService.Enabled() {
@@ -469,6 +470,17 @@ func (s *Service) Callback(c *gin.Context) {
 	s.logger.Info("oidc login: provider=%s sub=%s email=%s jti=%s", state.Provider, sub, email, jti)
 
 	c.Redirect(http.StatusSeeOther, state.ReturnURL)
+}
+
+func identityLinkReturnURL(returnURL, result string) string {
+	parsed, err := url.Parse(safeReturnURL(returnURL))
+	if err != nil {
+		return "/"
+	}
+	query := parsed.Query()
+	query.Set("identity_link", result)
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
 }
 
 type logoutResponse struct {

@@ -350,6 +350,7 @@ type OIDCProviderResponse struct {
 	GrafanaSyncStatus     string              `json:"grafanaSyncStatus"`
 	GrafanaSyncedRevision uint64              `json:"grafanaSyncedRevision"`
 	ProviderRevision      uint64              `json:"providerRevision"`
+	HasCandidate          bool                `json:"hasCandidate"`
 	GrafanaTarget         GrafanaProviderKind `json:"grafanaTarget"`
 	DevLakeCallbackURL    string              `json:"devlakeCallbackUrl"`
 	GrafanaCallbackURL    string              `json:"grafanaCallbackUrl"`
@@ -357,4 +358,12 @@ type OIDCProviderResponse struct {
 
 type GrafanaLoginResponse struct {
 	URL string `json:"url"`
+}
+
+// LinkableOIDCProviderResponse is the deliberately minimal provider view for an
+// authenticated person adding another sign-in method. It never exposes provider
+// configuration or identity-link state.
+type LinkableOIDCProviderResponse struct {
+	ProviderKey string `json:"providerKey"`
+	DisplayName string `json:"displayName"`
 }
