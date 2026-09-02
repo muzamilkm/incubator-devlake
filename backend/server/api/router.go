@@ -92,6 +92,7 @@ func RegisterRouter(r *gin.Engine, basicRes context.BasicRes) {
 	// auth (OIDC user login)
 	r.GET(auth.PathMethods, auth.GetMethods)
 	r.GET(auth.PathLogin, auth.LoginInit)
+	r.GET(auth.PathLinkIdentity, auth.LinkIdentityInit)
 	r.GET(auth.PathCallback, auth.Callback)
 	r.POST(auth.PathLogout, auth.Logout)
 	r.GET(auth.PathUserInfo, auth.UserInfo)

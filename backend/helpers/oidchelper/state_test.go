@@ -26,10 +26,11 @@ import (
 func TestEncodeDecodeStateRoundTrip(t *testing.T) {
 	secret := []byte("a-test-secret-with-at-least-32-bytes!")
 	in := &StatePayload{
-		Nonce:        "abc123",
-		ReturnURL:    "/projects",
-		PKCEVerifier: "verifier",
-		IssuedAt:     time.Now(),
+		Nonce:               "abc123",
+		ReturnURL:           "/projects",
+		PKCEVerifier:        "verifier",
+		IdentityLinkStateID: "link-state-id",
+		IssuedAt:            time.Now(),
 	}
 	encoded, err := EncodeState(secret, in)
 	if err != nil {
@@ -39,7 +40,7 @@ func TestEncodeDecodeStateRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if out.Nonce != in.Nonce || out.ReturnURL != in.ReturnURL || out.PKCEVerifier != in.PKCEVerifier {
+	if out.Nonce != in.Nonce || out.ReturnURL != in.ReturnURL || out.PKCEVerifier != in.PKCEVerifier || out.IdentityLinkStateID != in.IdentityLinkStateID {
 		t.Fatalf("round-trip mismatch: %+v vs %+v", in, out)
 	}
 }

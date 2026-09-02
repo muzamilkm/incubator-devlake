@@ -46,47 +46,63 @@ const (
 )
 
 // loadProviderSource preserves environment providers until the activation record
-// exists. Once it exists, database source state is authoritative: (nil, false, nil)
-// means no source is active; (nil, true, nil) means active but invalid and must fail
-// closed; and a non-nil error means the source could not be read. Operators recover an
-// invalid active source by restoring or enabling a valid provider through supported
-// administration before restarting, rather than falling back to environment credentials.
-func loadProviderSource(cfg *oidchelper.Config, db dal.Dal, config context.BasicRes) (*oidchelper.Config, CredentialProtector, error) {
-	provider, databaseSource, err := access.LoadDatabaseOIDCProvider(db)
+// exists. Once it does, database providers are authoritative. An empty provider set
+// with an active source fails closed rather than falling back to environment credentials.
+// Individual invalid providers are omitted with redacted warnings. Operators recover an
+// unusable active source by restoring or enabling a valid provider through supported
+// administration before restarting.
+func loadProviderSource(cfg *oidchelper.Config, db dal.Dal, config context.BasicRes) (*oidchelper.Config, CredentialProtector, []error, error) {
+	providers, databaseSource, err := access.LoadDatabaseOIDCProviders(db)
 	if err != nil {
-		return nil, nil, &providerSourceReadError{cause: fmt.Errorf("load database OIDC provider: %w", err)}
+		return nil, nil, nil, &providerSourceReadError{cause: fmt.Errorf("load database OIDC providers: %w", err)}
 	}
 	if !databaseSource {
-		return cfg, nil, nil
+		return cfg, nil, nil, nil
 	}
 	protector, loadErr := loadCredentialProtector(config)
 	if loadErr != nil {
-		return nil, nil, loadErr
+		return nil, nil, nil, loadErr
 	}
-	if provider == nil {
-		return nil, nil, fmt.Errorf("database OIDC source is active but has no enabled provider")
-	}
-	secret, decryptErr := protector.Unprotect(ProtectedCredential{Ciphertext: provider.EncryptedClientSecret, Nonce: provider.ClientSecretNonce, KeyID: provider.ClientSecretKeyID}, providerCredentialAAD(provider.ProviderKey))
-	if decryptErr != nil {
-		return nil, nil, fmt.Errorf("decrypt database OIDC provider credential: %w", decryptErr)
+	if len(providers) == 0 {
+		return nil, nil, nil, fmt.Errorf("database OIDC source is active but has no enabled provider")
 	}
 	effective := *cfg
 	effective.OIDCEnabled = true
 	if cfg.PublicURL == "" {
-		return nil, nil, fmt.Errorf("AUTH_PUBLIC_URL is required when database OIDC configuration is active")
+		return nil, nil, nil, fmt.Errorf("AUTH_PUBLIC_URL is required when database OIDC configuration is active")
 	}
 	allowHTTP := allowLocalOIDC(cfg.PublicURL)
-	issuerURL, validationErr := oidchelper.ValidateIssuerURL(provider.IssuerURL, allowHTTP)
-	if validationErr != nil {
-		return nil, nil, validationErr
+	effective.Providers = make(map[string]*oidchelper.ProviderConfig, len(providers))
+	warnings := make([]error, 0)
+	for _, provider := range providers {
+		providerConfig, providerErr := databaseProviderRuntimeConfig(cfg.PublicURL, allowHTTP, protector, &provider)
+		if providerErr != nil {
+			warnings = append(warnings, fmt.Errorf("database OIDC provider %q omitted: %w", provider.ProviderKey, providerErr))
+			continue
+		}
+		effective.Providers[provider.ProviderKey] = providerConfig
 	}
-	effective.Providers = map[string]*oidchelper.ProviderConfig{provider.ProviderKey: {
+	if len(effective.Providers) == 0 {
+		return nil, nil, warnings, fmt.Errorf("database OIDC source has no usable enabled providers")
+	}
+	return &effective, protector, warnings, nil
+}
+
+func databaseProviderRuntimeConfig(publicURL string, allowHTTP bool, protector CredentialProtector, provider *access.OIDCProvider) (*oidchelper.ProviderConfig, error) {
+	secret, err := protector.Unprotect(ProtectedCredential{Ciphertext: provider.EncryptedClientSecret, Nonce: provider.ClientSecretNonce, KeyID: provider.ClientSecretKeyID}, providerCredentialAAD(provider.ProviderKey))
+	if err != nil {
+		return nil, fmt.Errorf("decrypt credential: %w", err)
+	}
+	issuerURL, err := oidchelper.ValidateIssuerURL(provider.IssuerURL, allowHTTP)
+	if err != nil {
+		return nil, fmt.Errorf("validate issuer URL: %w", err)
+	}
+	return &oidchelper.ProviderConfig{
 		Name: provider.ProviderKey, IssuerURL: issuerURL.String(), ClientID: provider.ClientID,
-		ClientSecret: string(secret), RedirectURL: cfg.PublicURL + publicOIDCCallbackPath, DisplayName: provider.DisplayName,
+		ClientSecret: string(secret), RedirectURL: publicURL + publicOIDCCallbackPath, DisplayName: provider.DisplayName,
 		Scopes:     strings.FieldsFunc(provider.Scopes, func(r rune) bool { return r == ',' || r == ' ' }),
 		HTTPClient: oidchelper.NewRestrictedHTTPClient(allowHTTP),
-	}}
-	return &effective, protector, nil
+	}, nil
 }
 
 func allowLocalOIDC(publicURL string) bool {

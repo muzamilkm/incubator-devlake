@@ -51,11 +51,12 @@ import (
 // Auth-related route paths, defined in one place so router registration and
 // the middleware whitelist cannot drift.
 const (
-	PathMethods  = "/auth/methods"
-	PathLogin    = "/auth/login"
-	PathCallback = "/auth/callback"
-	PathLogout   = "/auth/logout"
-	PathUserInfo = "/auth/userinfo"
+	PathMethods      = "/auth/methods"
+	PathLogin        = "/auth/login"
+	PathLinkIdentity = "/auth/link-identity"
+	PathCallback     = "/auth/callback"
+	PathLogout       = "/auth/logout"
+	PathUserInfo     = "/auth/userinfo"
 )
 
 // lastSeenThrottle bounds DB writes to one per-jti per window. Tracking
@@ -85,6 +86,8 @@ type accessAuthorizer interface {
 	Enabled() bool
 	Authorize(identity access.Identity) (*access.Principal, errors.Error)
 	AuthorizeSession(identity access.Identity) (*access.Principal, errors.Error)
+	BeginIdentityLink(userID uint64, providerKey string) (string, errors.Error)
+	CompleteIdentityLink(stateID, providerKey string, identity access.Identity) errors.Error
 }
 
 // defaultService is populated by Init and backs the package-level handler /
@@ -115,7 +118,7 @@ func NewService(ctx stdctx.Context, basicRes corectx.BasicRes) (*Service, error)
 		return nil, err
 	}
 	bootstrapCfg := cfg
-	cfg, protector, err := loadProviderSource(cfg, basicRes.GetDal(), basicRes)
+	cfg, protector, providerWarnings, err := loadProviderSource(cfg, basicRes.GetDal(), basicRes)
 	if err != nil {
 		return nil, err
 	}
@@ -138,6 +141,9 @@ func NewService(ctx stdctx.Context, basicRes corectx.BasicRes) (*Service, error)
 		revoked:      newRevocationCache(),
 		lastSeen:     map[string]time.Time{},
 		access:       access.Default(),
+	}
+	for _, warning := range providerWarnings {
+		s.logger.Warn(warning, "auth: database OIDC provider omitted from runtime")
 	}
 	if cfg.AuthEnabled {
 		startRefresher(ctx, s.revoked, s.db, s.logger)
@@ -238,12 +244,47 @@ func (s *Service) LoginInit(c *gin.Context) {
 	if !s.ensureOIDC(c) {
 		return
 	}
-	cfg, _ := s.providerState()
 	name, p, ok := s.pickProvider(c, c.Query("provider"))
 	if !ok {
 		return
 	}
-	returnURL := safeReturnURL(c.Query("return_url"))
+	s.startOIDCAuthorization(c, name, p, safeReturnURL(c.Query("return_url")), "")
+}
+
+// LinkIdentityInit starts a fresh OIDC flow that can attach an additional identity
+// only to the access user authenticated by the current native session.
+func (s *Service) LinkIdentityInit(c *gin.Context) {
+	if !s.ensureOIDC(c) {
+		return
+	}
+	if s.access == nil || !s.access.Enabled() {
+		shared.ApiOutputError(c, errors.HttpStatus(http.StatusNotFound).New("identity linking is not enabled"))
+		return
+	}
+	currentIdentity, ok := access.GetIdentity(c)
+	if !ok {
+		shared.ApiOutputError(c, errors.Unauthorized.New("native OIDC authentication is required"))
+		return
+	}
+	principal, accessErr := s.access.AuthorizeSession(currentIdentity)
+	if accessErr != nil {
+		shared.ApiOutputError(c, accessErr)
+		return
+	}
+	name, provider, ok := s.pickProvider(c, c.Query("provider"))
+	if !ok {
+		return
+	}
+	linkStateID, linkErr := s.access.BeginIdentityLink(principal.UserID, name)
+	if linkErr != nil {
+		shared.ApiOutputError(c, linkErr)
+		return
+	}
+	s.startOIDCAuthorization(c, name, provider, safeReturnURL(c.Query("return_url")), linkStateID)
+}
+
+func (s *Service) startOIDCAuthorization(c *gin.Context, providerName string, provider *oidchelper.Provider, returnURL, linkStateID string) {
+	cfg, _ := s.providerState()
 
 	verifier, err := newPKCEVerifier()
 	if err != nil {
@@ -256,11 +297,12 @@ func (s *Service) LoginInit(c *gin.Context) {
 		return
 	}
 	encoded, err := oidchelper.EncodeState(cfg.SessionSecret, &oidchelper.StatePayload{
-		Provider:     name,
-		Nonce:        nonce,
-		ReturnURL:    returnURL,
-		PKCEVerifier: verifier,
-		IssuedAt:     time.Now(),
+		Provider:            providerName,
+		Nonce:               nonce,
+		ReturnURL:           returnURL,
+		PKCEVerifier:        verifier,
+		IdentityLinkStateID: linkStateID,
+		IssuedAt:            time.Now(),
 	})
 	if err != nil {
 		fail(c, http.StatusInternalServerError, "state encode", err)
@@ -268,7 +310,7 @@ func (s *Service) LoginInit(c *gin.Context) {
 	}
 	oidchelper.SetStateCookie(c, cfg, encoded)
 
-	oa, err := p.OAuth2Config(c.Request.Context())
+	oa, err := provider.OAuth2Config(c.Request.Context())
 	if err != nil {
 		fail(c, http.StatusBadGateway, "oauth2 config", err)
 		return
@@ -369,11 +411,22 @@ func (s *Service) Callback(c *gin.Context) {
 		fail(c, http.StatusForbidden, "id_token email is not verified", nil)
 		return
 	}
+	identity := access.Identity{Issuer: cfg.Providers[state.Provider].IssuerURL, Subject: sub, Email: email, DisplayName: name}
+	if state.IdentityLinkStateID != "" {
+		if s.access == nil || !s.access.Enabled() {
+			fail(c, http.StatusForbidden, "identity linking is not enabled", nil)
+			return
+		}
+		if linkErr := s.access.CompleteIdentityLink(state.IdentityLinkStateID, state.Provider, identity); linkErr != nil {
+			fail(c, linkErr.GetType().GetHttpCode(), "identity link failed", linkErr)
+			return
+		}
+		s.logger.Info("oidc identity linked: provider=%s", state.Provider)
+		c.Redirect(http.StatusSeeOther, state.ReturnURL)
+		return
+	}
 	if accessService := s.access; accessService != nil && accessService.Enabled() {
-		issuer := cfg.Providers[state.Provider].IssuerURL
-		if _, accessErr := accessService.Authorize(access.Identity{
-			Issuer: issuer, Subject: sub, Email: email, DisplayName: name,
-		}); accessErr != nil {
+		if _, accessErr := accessService.Authorize(identity); accessErr != nil {
 			if accessErr.GetType() == errors.Unauthorized || accessErr.GetType() == errors.Forbidden {
 				s.logger.Info("oidc login denied: provider=%s email=%s", state.Provider, email)
 			} else {

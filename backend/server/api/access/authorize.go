@@ -50,10 +50,9 @@ func (s *Service) Authorize(identity Identity) (*Principal, errors.Error) {
 		return nil, errors.Unauthorized.New("verified OIDC identity is incomplete")
 	}
 
-	user := &AccessUser{}
-	err := s.db.First(user, dal.Where("issuer = ? AND subject = ?", identity.Issuer, identity.Subject))
+	user, accessIdentity, err := s.userForIdentity(s.db, identity)
 	if err == nil {
-		return s.authorizeExistingUser(user, identity)
+		return s.authorizeExistingUser(user, accessIdentity, identity)
 	}
 	if !s.db.IsErrorNotFound(err) {
 		return nil, errors.Default.Wrap(err, "error looking up access user")
@@ -64,7 +63,14 @@ func (s *Service) Authorize(identity Identity) (*Principal, errors.Error) {
 	}
 	if invitationFound {
 		s.audit("", "user.invitation_claimed", invitation, "")
-		return s.authorizeExistingUser(invitation, identity)
+		claimedUser, claimedIdentity, lookupErr := s.userForIdentity(s.db, identity)
+		if lookupErr != nil {
+			return nil, errors.Default.Wrap(lookupErr, "error reading claimed access identity")
+		}
+		return s.authorizeExistingUser(claimedUser, claimedIdentity, identity)
+	}
+	if existingUserErr := s.rejectExistingEmailIdentity(identity.Email); existingUserErr != nil {
+		return nil, existingUserErr
 	}
 
 	if principal, bootstrapErr := s.bootstrap(identity); bootstrapErr != nil || principal != nil {
@@ -82,12 +88,11 @@ func (s *Service) Authorize(identity Identity) (*Principal, errors.Error) {
 			Issuer: identity.Issuer, Subject: identity.Subject, Email: identity.Email,
 			DisplayName: identity.DisplayName, Role: accessDomain.DefaultRole, Status: StatusActive,
 		}
-		if createErr := s.db.Create(user); createErr != nil {
+		if createErr := s.createUserWithIdentity(user, identity); createErr != nil {
 			if s.db.IsDuplicationError(createErr) {
-				existing := &AccessUser{}
-				lookupErr := s.db.First(existing, dal.Where("issuer = ? AND subject = ?", identity.Issuer, identity.Subject))
+				existing, existingIdentity, lookupErr := s.userForIdentity(s.db, identity)
 				if lookupErr == nil {
-					return s.authorizeExistingUser(existing, identity)
+					return s.authorizeExistingUser(existing, existingIdentity, identity)
 				}
 				if s.db.IsErrorNotFound(lookupErr) {
 					return nil, errors.Default.New("domain-authorized user was not available after duplicate identity creation")
@@ -132,9 +137,9 @@ func (s *Service) bootstrap(identity Identity) (*Principal, errors.Error) {
 				return nil, errors.Default.Wrap(rollbackErr, "error rolling back bootstrap administrator claim")
 			}
 			finished = true
-			existing := &AccessUser{}
-			if lookupErr := s.db.First(existing, dal.Where("issuer = ? AND subject = ?", identity.Issuer, identity.Subject)); lookupErr == nil {
-				return s.authorizeExistingUser(existing, identity)
+			existing, existingIdentity, lookupErr := s.userForIdentity(s.db, identity)
+			if lookupErr == nil {
+				return s.authorizeExistingUser(existing, existingIdentity, identity)
 			} else if !s.db.IsErrorNotFound(lookupErr) {
 				return nil, errors.Default.Wrap(lookupErr, "error reading bootstrap administrator")
 			}
@@ -149,6 +154,9 @@ func (s *Service) bootstrap(identity Identity) (*Principal, errors.Error) {
 	}
 	if err := tx.Create(user); err != nil {
 		return nil, errors.Default.Wrap(err, "error creating bootstrap administrator")
+	}
+	if err := tx.Create(newAccessIdentity(user.ID, identity, now)); err != nil {
+		return nil, errors.Default.Wrap(err, "error creating bootstrap administrator identity")
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, errors.Default.Wrap(err, "error committing bootstrap administrator")
@@ -195,32 +203,57 @@ func (s *Service) claimInvitation(identity Identity) (*AccessUser, bool, errors.
 	); err != nil {
 		return nil, false, errors.Default.Wrap(err, "error claiming invited access user")
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, false, errors.Default.Wrap(err, "error committing invited access user claim")
-	}
-	finished = true
-
 	claimed := &AccessUser{}
-	if err := s.db.First(claimed, dal.Where("id = ?", invitation.ID)); err != nil {
+	if err := tx.First(claimed, dal.Where("id = ?", invitation.ID)); err != nil {
 		return nil, false, errors.Default.Wrap(err, "error reading claimed access user")
 	}
 	if claimed.Issuer != identity.Issuer || claimed.Subject != identity.Subject {
 		return nil, false, errors.Unauthorized.New("this invitation has already been claimed")
 	}
+	if err := tx.Create(newAccessIdentity(claimed.ID, identity, now)); err != nil {
+		if tx.IsDuplicationError(err) {
+			return nil, false, errors.Unauthorized.New("this OIDC identity is already linked to another account")
+		}
+		return nil, false, errors.Default.Wrap(err, "error creating invited access identity")
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, false, errors.Default.Wrap(err, "error committing invited access user claim")
+	}
+	finished = true
+
 	return claimed, true, nil
 }
 
-func (s *Service) authorizeExistingUser(user *AccessUser, identity Identity) (*Principal, errors.Error) {
+func (s *Service) authorizeExistingUser(user *AccessUser, accessIdentity *AccessIdentity, identity Identity) (*Principal, errors.Error) {
 	if user.HiddenAt != nil || user.Status != StatusActive {
 		return nil, errors.Unauthorized.New("this account is disabled")
 	}
 	now := time.Now()
+	tx := s.db.Begin()
+	committed := false
+	defer func() {
+		if !committed {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				s.logger.Error(rollbackErr, "access: rollback identity login user_id=%d", user.ID)
+			}
+		}
+	}()
+	accessIdentity.VerifiedEmail = identity.Email
+	accessIdentity.DisplayName = identity.DisplayName
+	accessIdentity.LastLoginAt = &now
+	if err := tx.Update(accessIdentity); err != nil {
+		return nil, errors.Default.Wrap(err, "error recording access identity login")
+	}
 	user.Email = identity.Email
 	user.DisplayName = identity.DisplayName
 	user.LastLoginAt = &now
-	if err := s.db.Update(user); err != nil {
+	if err := tx.Update(user); err != nil {
 		return nil, errors.Default.Wrap(err, "error recording access user login")
 	}
+	if err := tx.Commit(); err != nil {
+		return nil, errors.Default.Wrap(err, "error committing access identity login")
+	}
+	committed = true
 	return &Principal{UserID: user.ID, Role: user.Role}, nil
 }
 
@@ -244,8 +277,7 @@ func (s *Service) AuthorizeSession(identity Identity) (*Principal, errors.Error)
 	if identity.Issuer == "" || identity.Subject == "" {
 		return nil, errors.Unauthorized.New("native session identity is incomplete")
 	}
-	user := &AccessUser{}
-	err := s.db.First(user, dal.Where("issuer = ? AND subject = ?", identity.Issuer, identity.Subject))
+	user, _, err := s.userForIdentity(s.db, identity)
 	if err != nil {
 		if s.db.IsErrorNotFound(err) {
 			return nil, errors.Unauthorized.New("this account is not allowed to access DevLake")
@@ -256,6 +288,62 @@ func (s *Service) AuthorizeSession(identity Identity) (*Principal, errors.Error)
 		return nil, errors.Unauthorized.New("this account is disabled")
 	}
 	return &Principal{UserID: user.ID, Role: user.Role}, nil
+}
+
+func (s *Service) createUserWithIdentity(user *AccessUser, identity Identity) errors.Error {
+	tx := s.db.Begin()
+	committed := false
+	defer func() {
+		if !committed {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				s.logger.Error(rollbackErr, "access: rollback access user identity creation email=%s", identity.Email)
+			}
+		}
+	}()
+	if err := tx.Create(user); err != nil {
+		return err
+	}
+	now := time.Now()
+	if err := tx.Create(newAccessIdentity(user.ID, identity, now)); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
+func newAccessIdentity(userID uint64, identity Identity, linkedAt time.Time) *AccessIdentity {
+	return &AccessIdentity{
+		AccessUserID: userID,
+		Issuer:       identity.Issuer, Subject: identity.Subject,
+		VerifiedEmail: identity.Email, DisplayName: identity.DisplayName,
+		LinkedAt: linkedAt, LastLoginAt: &linkedAt,
+	}
+}
+
+func (s *Service) userForIdentity(db dal.Dal, identity Identity) (*AccessUser, *AccessIdentity, errors.Error) {
+	accessIdentity := &AccessIdentity{}
+	if err := db.First(accessIdentity, dal.Where("issuer = ? AND subject = ?", identity.Issuer, identity.Subject)); err != nil {
+		return nil, nil, err
+	}
+	user := &AccessUser{}
+	if err := db.First(user, dal.Where("id = ?", accessIdentity.AccessUserID)); err != nil {
+		return nil, nil, err
+	}
+	return user, accessIdentity, nil
+}
+
+func (s *Service) rejectExistingEmailIdentity(email string) errors.Error {
+	user := &AccessUser{}
+	if err := s.db.First(user, dal.Where("email = ?", email)); err != nil {
+		if s.db.IsErrorNotFound(err) {
+			return nil
+		}
+		return errors.Default.Wrap(err, "error checking access user email")
+	}
+	return errors.Unauthorized.New("this account must link the new OIDC identity while signed in")
 }
 
 func (s *Service) RequireAdmin(c *gin.Context) (*Principal, errors.Error) {

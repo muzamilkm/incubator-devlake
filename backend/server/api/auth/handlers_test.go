@@ -208,6 +208,7 @@ func newTestRouter(s *Service) *gin.Engine {
 	r.Use(s.RequireAuth())
 	r.Use(s.CSRFProtect())
 	r.GET(PathLogin, s.LoginInit)
+	r.GET(PathLinkIdentity, s.LinkIdentityInit)
 	r.GET(PathCallback, s.Callback)
 	r.GET(PathUserInfo, s.UserInfo)
 	r.POST(PathLogout, s.Logout)
@@ -257,6 +258,53 @@ func TestLoginInitSetsStateCookieAndRedirects(t *testing.T) {
 	defer resp.Body.Close()
 	if c := extractCookie(t, resp, oidchelper.StateCookieName); c.Value == "" {
 		t.Fatal("state cookie was empty")
+	}
+}
+
+func TestLinkIdentityFlowBindsStateToAuthenticatedUserAndProvider(t *testing.T) {
+	idp := newFakeIdP(t)
+	s, _ := newTestService(t, idp)
+	authorizer := &testAccessAuthorizer{linkStateID: "link-state-123"}
+	s.access = authorizer
+	r := newTestRouter(s)
+
+	cfg, _ := s.providerState()
+	session, _, err := oidchelper.IssueSession(cfg, "link-session", "test", idp.subject, idp.email, idp.name)
+	if err != nil {
+		t.Fatalf("issue session: %v", err)
+	}
+	startRequest := httptest.NewRequest(http.MethodGet, PathLinkIdentity+"?provider=test&return_url=/access", nil)
+	startRequest.AddCookie(&http.Cookie{Name: oidchelper.SessionCookieName, Value: session})
+	startResponse := httptest.NewRecorder()
+	r.ServeHTTP(startResponse, startRequest)
+	if startResponse.Code != http.StatusSeeOther {
+		t.Fatalf("link start: expected 303, got %d: %s", startResponse.Code, startResponse.Body.String())
+	}
+	stateCookie := extractCookie(t, startResponse.Result(), oidchelper.StateCookieName)
+	state, err := oidchelper.DecodeState(cfg.SessionSecret, stateCookie.Value)
+	if err != nil {
+		t.Fatalf("decode link state: %v", err)
+	}
+	if state.Provider != "test" || state.IdentityLinkStateID != authorizer.linkStateID {
+		t.Fatalf("link state = %+v, want provider=%q state=%q", state, "test", authorizer.linkStateID)
+	}
+
+	callbackRequest := httptest.NewRequest(http.MethodGet,
+		PathCallback+"?code=fake-code&state="+url.QueryEscape(state.Nonce), nil)
+	callbackRequest.AddCookie(stateCookie)
+	callbackResponse := httptest.NewRecorder()
+	r.ServeHTTP(callbackResponse, callbackRequest)
+	if callbackResponse.Code != http.StatusSeeOther {
+		t.Fatalf("link callback: expected 303, got %d: %s", callbackResponse.Code, callbackResponse.Body.String())
+	}
+	if callbackResponse.Header().Get("Location") != "/access" {
+		t.Fatalf("link callback location = %q, want /access", callbackResponse.Header().Get("Location"))
+	}
+	if authorizer.linkProvider != "test" || authorizer.linkedProvider != "test" || authorizer.linkedStateID != authorizer.linkStateID {
+		t.Fatalf("link binding = start provider=%q callback provider=%q state=%q", authorizer.linkProvider, authorizer.linkedProvider, authorizer.linkedStateID)
+	}
+	if authorizer.linkedIdentity.Issuer != idp.issuer || authorizer.linkedIdentity.Subject != idp.subject {
+		t.Fatalf("linked identity = %+v, want IdP identity", authorizer.linkedIdentity)
 	}
 }
 

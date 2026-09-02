@@ -219,12 +219,18 @@ func (s *Service) updateUser(actor string, id uint64, role, status string, hide 
 	}
 	var revokedSessionIDs []string
 	if status == StatusDisabled && s.sessionRevoker != nil {
-		ids, err := s.sessionRevoker.RevokePersistentSessions(tx, user.Issuer, user.Subject)
-		if err != nil {
-			s.logger.Error(err, "access: revoke sessions for disabled user id=%d email=%s", user.ID, user.Email)
-			return nil, errors.Default.Wrap(err, "error revoking sessions for disabled access user")
+		identities := make([]AccessIdentity, 0)
+		if err := tx.All(&identities, dal.Where("access_user_id = ?", user.ID)); err != nil {
+			return nil, errors.Default.Wrap(err, "error reading access identities for disabled user")
 		}
-		revokedSessionIDs = ids
+		for _, identity := range identities {
+			ids, err := s.sessionRevoker.RevokePersistentSessions(tx, identity.Issuer, identity.Subject)
+			if err != nil {
+				s.logger.Error(err, "access: revoke sessions for disabled user id=%d email=%s", user.ID, user.Email)
+				return nil, errors.Default.Wrap(err, "error revoking sessions for disabled access user")
+			}
+			revokedSessionIDs = append(revokedSessionIDs, ids...)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, errors.Default.Wrap(err, "error committing access user change")

@@ -85,7 +85,7 @@ func (s *Service) PrepareOIDCProvider(ctx stdctx.Context, provider *access.OIDCP
 // request observes the new authoritative database provider.
 func (s *Service) RefreshOIDCProvider(ctx stdctx.Context) errors.Error {
 	_ = ctx
-	cfg, protector, err := loadProviderSource(s.bootstrapCfg, s.db, s.basicRes)
+	cfg, protector, providerWarnings, err := loadProviderSource(s.bootstrapCfg, s.db, s.basicRes)
 	if err != nil {
 		var sourceReadErr *providerSourceReadError
 		if stderrs.As(err, &sourceReadErr) {
@@ -94,6 +94,9 @@ func (s *Service) RefreshOIDCProvider(ctx stdctx.Context) errors.Error {
 		}
 		s.replaceProviderState(databaseOIDCUnavailableConfig(s.bootstrapCfg))
 		return errors.Default.Wrap(err, "refresh database OIDC provider")
+	}
+	for _, warning := range providerWarnings {
+		s.logger.Warn(warning, "auth: database OIDC provider omitted from runtime")
 	}
 	if cfg == s.bootstrapCfg {
 		return errors.Default.New("database OIDC provider source is not active")
