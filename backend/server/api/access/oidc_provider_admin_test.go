@@ -167,6 +167,32 @@ func TestOIDCProviderResponseIncludesDeploymentDerivedCallbacks(t *testing.T) {
 	}
 }
 
+func TestOIDCProviderCallbacksIncludeEachGrafanaSignInOption(t *testing.T) {
+	service := &Service{cfg: Config{
+		AuthPublicURL:    "https://devlake.example.com",
+		GrafanaPublicURL: "https://grafana.example.com",
+	}}
+	callbacks, err := service.OIDCProviderCallbacks()
+	if err != nil {
+		t.Fatalf("OIDCProviderCallbacks() error = %v", err)
+	}
+	if callbacks.DevLakeCallbackURL != "https://devlake.example.com/api/auth/callback" {
+		t.Fatalf("DevLake callback = %q", callbacks.DevLakeCallbackURL)
+	}
+	for target, want := range map[GrafanaProviderKind]string{
+		GrafanaProviderNone:         "/login",
+		GrafanaProviderGoogle:       "/login/google",
+		GrafanaProviderAzureAD:      "/login/azuread",
+		GrafanaProviderOkta:         "/login/okta",
+		GrafanaProviderGitLab:       "/login/gitlab",
+		GrafanaProviderGenericOAuth: "/login/generic_oauth",
+	} {
+		if got := callbacks.GrafanaCallbackURLs[target]; got != "https://grafana.example.com"+want {
+			t.Errorf("Grafana callback for %q = %q, want %q", target, got, "https://grafana.example.com"+want)
+		}
+	}
+}
+
 func TestOIDCProviderCallbacksRequireDeploymentOrigins(t *testing.T) {
 	service := &Service{cfg: Config{AuthPublicURL: "https://devlake.example.com"}}
 	if _, _, err := service.oidcProviderCallbacks(); err == nil {

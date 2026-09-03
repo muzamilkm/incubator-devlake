@@ -26,7 +26,7 @@ import {
   type OIDCProvider,
   type OIDCProviderInput,
 } from '../../api/access';
-import { OIDC_PROVIDER_STATUS } from './constants';
+import { AUTHENTICATION_STATE, OIDC_PROVIDER_STATUS } from './constants';
 
 export const ACCESS_ERROR = {
   DUPLICATE_DOMAIN: 'This domain already has a DevLake access policy.',
@@ -175,6 +175,15 @@ export const getOIDCProviderStatus = (provider?: OIDCProvider) => {
   if (provider.grafanaTarget === GRAFANA_PROVIDER_KIND.NONE) return OIDC_PROVIDER_STATUS.DEVLAKE_ONLY;
   if (provider.providerRevision > provider.grafanaSyncedRevision) return OIDC_PROVIDER_STATUS.PENDING;
   return OIDC_PROVIDER_STATUS.ACTIVE;
+};
+
+export const getAuthenticationState = (providers: OIDCProvider[]) => {
+  if (providers.length === 0) return AUTHENTICATION_STATE.NO_MANAGED_OIDC;
+  if (providers.some((provider) => provider.databaseSourceActive && provider.enabled)) {
+    return AUTHENTICATION_STATE.OIDC_ACTIVE;
+  }
+  if (providers.some((provider) => provider.hasCandidate)) return AUTHENTICATION_STATE.ACTIVATION_REQUIRED;
+  return AUTHENTICATION_STATE.NO_ACTIVE_OIDC;
 };
 
 export const canActivateOIDCProvider = (provider?: OIDCProvider) => {

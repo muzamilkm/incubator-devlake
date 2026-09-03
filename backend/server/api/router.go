@@ -111,6 +111,7 @@ func RegisterRouter(r *gin.Engine, basicRes context.BasicRes) {
 	r.POST("/access/domains/:id/hide", access.HideDomain)
 	r.GET("/access/audit-events", access.ListAuditEvents)
 	r.GET("/access/oidc-provider", access.GetOIDCProvider)
+	r.GET("/access/oidc-providers/callbacks", access.GetOIDCProviderCallbacks)
 	r.GET("/access/oidc-providers", access.ListOIDCProviders)
 	r.POST("/access/oidc-provider/validate", access.ValidateOIDCProvider)
 	r.PUT("/access/oidc-provider", access.PutOIDCProvider)

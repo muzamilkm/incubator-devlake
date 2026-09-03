@@ -30,6 +30,7 @@ import {
 import {
   ACCESS_ERROR,
   canActivateOIDCProvider,
+  getAuthenticationState,
   formFromOIDCProvider,
   getCreateDomainError,
   getCreateUserError,
@@ -42,7 +43,7 @@ import {
   canSelectGenericOIDCProvider,
   normalizeDomain,
 } from './utils';
-import { OIDC_PROVIDER_STATUS, OIDC_PROVIDER_STATUS_COLOR } from './constants';
+import { AUTHENTICATION_STATE, OIDC_PROVIDER_STATUS, OIDC_PROVIDER_STATUS_COLOR } from './constants';
 
 const createAxiosError = (status: number, data: unknown) =>
   new AxiosError('Request failed', 'ERR_BAD_REQUEST', undefined, undefined, {
@@ -260,6 +261,34 @@ test('summarizes OIDC provider lifecycle state without exposing internal synchro
   equal(OIDC_PROVIDER_STATUS_COLOR[OIDC_PROVIDER_STATUS.COMPENSATED], 'orange');
   equal(OIDC_PROVIDER_STATUS_COLOR[OIDC_PROVIDER_STATUS.RECOVERY], 'red');
   equal(OIDC_PROVIDER_STATUS_COLOR[OIDC_PROVIDER_STATUS.CONFIGURED], 'orange');
+});
+
+test('summarizes the authentication configuration state without inferring environment configuration', () => {
+  const provider: OIDCProvider = {
+    providerKey: 'google',
+    displayName: 'Google',
+    issuerUrl: 'https://accounts.google.com',
+    clientId: 'client',
+    scopes: 'openid profile email',
+    enabled: false,
+    secretConfigured: true,
+    databaseSourceActive: false,
+    grafanaSyncStatus: OIDC_PROVIDER_SYNC_STATUS.SYNCHRONIZED,
+    grafanaSyncedRevision: 1,
+    providerRevision: 1,
+    hasCandidate: false,
+    grafanaTarget: GRAFANA_PROVIDER_KIND.GOOGLE,
+    devlakeCallbackUrl: 'https://devlake.example.com/api/auth/callback',
+    grafanaCallbackUrl: 'https://grafana.example.com/login/google',
+  };
+
+  equal(getAuthenticationState([]), AUTHENTICATION_STATE.NO_MANAGED_OIDC);
+  equal(getAuthenticationState([{ ...provider, hasCandidate: true }]), AUTHENTICATION_STATE.ACTIVATION_REQUIRED);
+  equal(getAuthenticationState([provider]), AUTHENTICATION_STATE.NO_ACTIVE_OIDC);
+  equal(
+    getAuthenticationState([{ ...provider, enabled: true, databaseSourceActive: true }]),
+    AUTHENTICATION_STATE.OIDC_ACTIVE,
+  );
 });
 
 test('requires explicit DevLake-only confirmation and identifies a Generic OAuth candidate', () => {

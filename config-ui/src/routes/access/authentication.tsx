@@ -26,6 +26,7 @@ import API from '@/api';
 import {
   GRAFANA_PROVIDER_KIND,
   OIDC_PROVIDER_SYNC_STATUS,
+  type OIDCCallbacks,
   type OIDCProvider,
   type OIDCProviderInput,
 } from '@/api/access';
@@ -43,6 +44,7 @@ import {
   canActivateOIDCProvider,
   canSelectGenericOIDCProvider,
   formFromOIDCProvider,
+  getAuthenticationState,
   getOIDCProviderError,
   getOIDCProviderStatus,
   isValidOIDCProviderInput,
@@ -50,6 +52,7 @@ import {
 } from './utils';
 
 type Props = {
+  callbacks?: OIDCCallbacks;
   providers: OIDCProvider[];
   loadFailed: boolean;
   onRefresh: () => void;
@@ -93,7 +96,7 @@ const providerActionMessage = (action: Operation, provider: OIDCProvider) => {
   return `Activate ${provider.displayName} for DevLake sign-in.`;
 };
 
-export const Authentication = ({ providers, loadFailed, onRefresh }: Props) => {
+export const Authentication = ({ callbacks, providers, loadFailed, onRefresh }: Props) => {
   const [editorOpen, setEditorOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<OIDCProvider>();
   const [form, setForm] = useState<OIDCProviderInput>(() => formFromOIDCProvider());
@@ -106,6 +109,7 @@ export const Authentication = ({ providers, loadFailed, onRefresh }: Props) => {
   const validInput = isValidOIDCProviderInput(form, selectedProvider);
   const requiresReplacementSecret =
     !selectedProvider?.secretConfigured || form.clientId.trim() !== selectedProvider.clientId;
+  const authenticationState = getAuthenticationState(providers);
   const isActionOperating = (action: Operation, providerKey?: string) =>
     operating?.action === action && operating.providerKey === providerKey;
 
@@ -323,9 +327,14 @@ export const Authentication = ({ providers, loadFailed, onRefresh }: Props) => {
     <>
       <SectionHeader $spaced>
         <SectionTitle>Authentication</SectionTitle>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>
-          Add provider
-        </Button>
+        <Space size="small">
+          <Tooltip title="Review the OIDC configuration managed in User Management.">
+            <Button onClick={() => openEditor(providers[0])}>{authenticationState}</Button>
+          </Tooltip>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>
+            Add provider
+          </Button>
+        </Space>
       </SectionHeader>
       <Message content="Grafana access remains independently managed. Providers marked DevLake only use Grafana's ordinary login." />
       {operationError && <Alert type="error" showIcon message={operationError} style={{ marginTop: 16 }} />}
@@ -364,8 +373,14 @@ export const Authentication = ({ providers, loadFailed, onRefresh }: Props) => {
         width={720}
       >
         <Space direction="vertical" size={16} style={{ display: 'flex' }}>
-          <Callback label="DevLake callback URL" value={selectedProvider?.devlakeCallbackUrl ?? ''} />
-          <Callback label="Grafana callback URL" value={selectedProvider?.grafanaCallbackUrl ?? ''} />
+          <Callback
+            label="DevLake callback URL"
+            value={selectedProvider?.devlakeCallbackUrl ?? callbacks?.devlakeCallbackUrl ?? ''}
+          />
+          <Callback
+            label="Grafana callback URL"
+            value={selectedProvider?.grafanaCallbackUrl ?? callbacks?.grafanaCallbackUrls[form.grafanaTarget] ?? ''}
+          />
           <Block
             title="Provider key"
             description="Use a stable lowercase identifier. It cannot change after creation."

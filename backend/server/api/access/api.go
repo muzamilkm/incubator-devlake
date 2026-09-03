@@ -306,6 +306,18 @@ func ListOIDCProviders(c *gin.Context) {
 	shared.ApiOutputSuccess(c, providers, http.StatusOK)
 }
 
+func GetOIDCProviderCallbacks(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+	callbacks, err := Default().OIDCProviderCallbacks()
+	if err != nil {
+		outputError(c, err)
+		return
+	}
+	shared.ApiOutputSuccess(c, callbacks, http.StatusOK)
+}
+
 func ValidateOIDCProvider(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
 		return

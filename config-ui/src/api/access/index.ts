@@ -134,6 +134,11 @@ export type OIDCProvider = Omit<OIDCProviderInput, 'clientSecret' | 'confirmDevl
   allowLocalOidc: boolean;
 };
 
+export type OIDCCallbacks = {
+  devlakeCallbackUrl: string;
+  grafanaCallbackUrls: Record<GrafanaProviderKind, string>;
+};
+
 export type LinkableOIDCProvider = Pick<OIDCProvider, 'providerKey' | 'displayName'>;
 
 export type GrafanaLogin = {
@@ -178,7 +183,7 @@ export const updateDomain = (id: ID, data: { defaultRole: AccessRole; status: Ac
 export const hideDomain = (id: ID): Promise<AccessDomain> =>
   request(`${basePath}/domains/${id}/hide`, { method: 'POST' });
 export const listAuditEvents = (): Promise<AccessAuditEvent[]> => request(`${basePath}/audit-events`);
-export const getOIDCProvider = (): Promise<OIDCProvider> => request(`${basePath}/oidc-provider`);
+export const getOIDCCallbacks = (): Promise<OIDCCallbacks> => request(`${basePath}/oidc-providers/callbacks`);
 export const listOIDCProviders = (): Promise<OIDCProvider[]> => request(`${basePath}/oidc-providers`);
 export const listLinkableOIDCProviders = (): Promise<LinkableOIDCProvider[]> =>
   request(`${basePath}/oidc-providers/linkable`);

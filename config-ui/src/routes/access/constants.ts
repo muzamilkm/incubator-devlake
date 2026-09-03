@@ -43,6 +43,13 @@ export const OIDC_PROVIDER_STATUS = {
   RETIRED: 'Retired',
 } as const;
 
+export const AUTHENTICATION_STATE = {
+  NO_MANAGED_OIDC: 'No OIDC provider managed here',
+  ACTIVATION_REQUIRED: 'OIDC activation required',
+  NO_ACTIVE_OIDC: 'No active OIDC provider',
+  OIDC_ACTIVE: 'OIDC sign-in active',
+} as const;
+
 export const OIDC_PROVIDER_MESSAGE = {
   GRAFANA_SYNCHRONIZED: 'Grafana OAuth configuration synchronized.',
   CALLBACK_DESCRIPTION: 'Register this exact callback URL with the customer OIDC provider.',

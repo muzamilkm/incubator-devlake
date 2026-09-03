@@ -90,6 +90,28 @@ func (s *Service) oidcProviderCallbacks() (string, string, errors.Error) {
 	return s.cfg.AuthPublicURL + authOIDCCallbackPath, s.cfg.GrafanaPublicURL, nil
 }
 
+func (s *Service) OIDCProviderCallbacks() (*OIDCProviderCallbacksResponse, errors.Error) {
+	devLakeCallbackURL, grafanaPublicURL, err := s.oidcProviderCallbacks()
+	if err != nil {
+		return nil, err
+	}
+	callbackURLs := make(map[GrafanaProviderKind]string, 6)
+	for _, target := range []GrafanaProviderKind{
+		GrafanaProviderNone,
+		GrafanaProviderGoogle,
+		GrafanaProviderAzureAD,
+		GrafanaProviderOkta,
+		GrafanaProviderGitLab,
+		GrafanaProviderGenericOAuth,
+	} {
+		callbackURLs[target] = grafanaPublicURL + grafanaLoginPath(target)
+	}
+	return &OIDCProviderCallbacksResponse{
+		DevLakeCallbackURL:  devLakeCallbackURL,
+		GrafanaCallbackURLs: callbackURLs,
+	}, nil
+}
+
 func (s *Service) decorateOIDCProviderResponse(response *OIDCProviderResponse) *OIDCProviderResponse {
 	if response == nil {
 		return nil

@@ -356,6 +356,13 @@ type OIDCProviderResponse struct {
 	GrafanaCallbackURL    string              `json:"grafanaCallbackUrl"`
 }
 
+// OIDCProviderCallbacksResponse exposes deployment-derived redirect URIs before
+// an OIDC provider has been persisted. It contains no provider credentials.
+type OIDCProviderCallbacksResponse struct {
+	DevLakeCallbackURL  string                         `json:"devlakeCallbackUrl"`
+	GrafanaCallbackURLs map[GrafanaProviderKind]string `json:"grafanaCallbackUrls"`
+}
+
 type GrafanaLoginResponse struct {
 	URL string `json:"url"`
 }
