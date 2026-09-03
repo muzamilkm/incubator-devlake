@@ -59,13 +59,28 @@ func (s *Service) PrepareOIDCProvider(ctx stdctx.Context, provider *access.OIDCP
 	if err := discovered.Claims(&metadata); err != nil || strings.TrimSpace(metadata.UserInfoEndpoint) == "" {
 		return nil, errors.BadInput.New("OIDC discovery must provide a user info endpoint", errors.WithData(access.ErrCodeInvalidProvider))
 	}
+	authURL := endpoint.AuthURL
+	tokenURL := endpoint.TokenURL
+	apiURL := metadata.UserInfoEndpoint
+
+	switch provider.GrafanaTarget {
+	case access.GrafanaProviderGoogle, access.GrafanaProviderGitLab:
+		// Grafana native Google and GitLab have built-in endpoints and reject non-empty custom URLs.
+		authURL = ""
+		tokenURL = ""
+		apiURL = ""
+	case access.GrafanaProviderAzureAD:
+		// Grafana native AzureAD accepts tenant-specific auth/token URLs but rejects custom API URL.
+		apiURL = ""
+	}
+
 	prepared.GrafanaSettings = access.GrafanaSSOSettings{
 		Name:         provider.DisplayName,
 		ClientID:     provider.ClientID,
 		ClientSecret: clientSecret,
-		AuthURL:      endpoint.AuthURL,
-		TokenURL:     endpoint.TokenURL,
-		APIURL:       metadata.UserInfoEndpoint,
+		AuthURL:      authURL,
+		TokenURL:     tokenURL,
+		APIURL:       apiURL,
 		Scopes:       provider.Scopes,
 		AllowSignUp:  false,
 		AutoLogin:    false,

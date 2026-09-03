@@ -185,8 +185,19 @@ func (s *Service) activateOIDCProvider(provider *OIDCProvider, candidate *OIDCPr
 	if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{{ColumnName: "enabled", Value: true}}, dal.Where("id = ? AND retired_at IS NULL", provider.ID)); err != nil {
 		return errors.Default.Wrap(err, "error enabling OIDC provider")
 	}
-	if err := tx.UpdateColumns(&OIDCProviderConfiguration{}, []dal.DalSet{{ColumnName: "activated_at", Value: now}}, dal.Where("id = ? AND activated_at IS NULL", OIDCProviderSourceKey)); err != nil {
-		return errors.Default.Wrap(err, "error activating database OIDC source")
+	cfg := &OIDCProviderConfiguration{}
+	if err := tx.First(cfg, dal.Where("id = ?", OIDCProviderSourceKey)); err != nil {
+		if tx.IsErrorNotFound(err) {
+			if createErr := tx.Create(&OIDCProviderConfiguration{ID: OIDCProviderSourceKey, ActivatedAt: &now}); createErr != nil {
+				return errors.Default.Wrap(createErr, "error creating database OIDC configuration")
+			}
+		} else {
+			return errors.Default.Wrap(err, "error reading database OIDC configuration")
+		}
+	} else if cfg.ActivatedAt == nil {
+		if updateErr := tx.UpdateColumns(&OIDCProviderConfiguration{}, []dal.DalSet{{ColumnName: "activated_at", Value: now}}, dal.Where("id = ?", OIDCProviderSourceKey)); updateErr != nil {
+			return errors.Default.Wrap(updateErr, "error activating database OIDC source")
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return errors.Default.Wrap(err, "error committing OIDC provider activation")

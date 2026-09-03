@@ -19,8 +19,10 @@ package access
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -95,5 +97,23 @@ func TestNewGrafanaSSOClientRequiresManagementCredentials(t *testing.T) {
 				t.Fatalf("NewGrafanaSSOClient() = %v, %v; want nil client and error", client, err)
 			}
 		})
+	}
+}
+
+func TestGrafanaSSOSettingsOmitsEmptyURLs(t *testing.T) {
+	settings := GrafanaSSOSettings{
+		Name:         "Google",
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		Scopes:       "openid email profile",
+		Enabled:      true,
+	}
+	body, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonStr := string(body)
+	if strings.Contains(jsonStr, "authUrl") || strings.Contains(jsonStr, "tokenUrl") || strings.Contains(jsonStr, "apiUrl") {
+		t.Fatalf("expected empty URLs to be omitted from JSON, got %s", jsonStr)
 	}
 }
