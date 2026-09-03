@@ -112,6 +112,13 @@ func (s *Service) SaveOIDCProvider(ctx context.Context, actor string, input OIDC
 	if current != nil && input.Revision != 0 && current.Revision != input.Revision {
 		return nil, errors.BadInput.New("the OIDC provider changed; refresh it before saving", errors.WithData(ErrCodeProviderRevisionConflict))
 	}
+	currentID := uint64(0)
+	if current != nil {
+		currentID = current.ID
+	}
+	if issuerErr := s.ensureIssuerAvailable(provider.IssuerURL, currentID); issuerErr != nil {
+		return nil, issuerErr
+	}
 	if conflictErr := s.validateGrafanaTargetAssignment(provider, current); conflictErr != nil {
 		return nil, conflictErr
 	}
@@ -196,6 +203,16 @@ func (s *Service) ensureGrafanaTargetAvailable(target GrafanaProviderKind, provi
 		if existing.ID != providerID {
 			return errors.BadInput.New("another OIDC provider already controls this Grafana login", errors.WithData(ErrCodeGrafanaTargetConflict))
 		}
+	}
+	return nil
+}
+
+func (s *Service) ensureIssuerAvailable(issuerURL string, providerID uint64) errors.Error {
+	existing := &OIDCProvider{}
+	if err := s.db.First(existing, dal.Where("issuer_url = ? AND retired_at IS NULL AND id <> ?", issuerURL, providerID)); err == nil {
+		return errors.BadInput.New("another active OIDC provider already uses this issuer URL", errors.WithData(ErrCodeInvalidProvider))
+	} else if !s.db.IsErrorNotFound(err) {
+		return errors.Default.Wrap(err, "error checking existing OIDC provider issuer")
 	}
 	return nil
 }

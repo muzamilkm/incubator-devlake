@@ -39,7 +39,6 @@ type authAccessIdentity20260902 struct {
 	DisplayName   string `gorm:"type:varchar(255)"`
 	LinkedAt      time.Time
 	LastLoginAt   *time.Time
-	DisabledAt    *time.Time
 }
 
 func (authAccessIdentity20260902) TableName() string { return "auth_access_identities" }

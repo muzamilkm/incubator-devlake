@@ -121,8 +121,9 @@ type AccessUser struct {
 func (AccessUser) TableName() string { return "auth_access_users" }
 
 // AccessIdentity is one verified OIDC identity owned by an access-directory user.
-// AccessUser remains the authorization, role, and audit owner; an identity never
-// grants access independently of its active parent user.
+// AccessUser remains the authorization, role, and audit owner; parent AccessUser
+// status and hidden state govern identity admission, so child identities do not carry
+// separate disable timestamps.
 type AccessIdentity struct {
 	common.Model
 	AccessUserID  uint64     `gorm:"index:idx_auth_access_identity_user" json:"accessUserId"`
@@ -132,7 +133,6 @@ type AccessIdentity struct {
 	DisplayName   string     `gorm:"type:varchar(255)" json:"displayName"`
 	LinkedAt      time.Time  `json:"linkedAt"`
 	LastLoginAt   *time.Time `json:"lastLoginAt,omitempty"`
-	DisabledAt    *time.Time `json:"disabledAt,omitempty"`
 }
 
 func (AccessIdentity) TableName() string { return "auth_access_identities" }
@@ -218,7 +218,7 @@ type OIDCProvider struct {
 	common.Model
 	ProviderKey           string              `gorm:"type:varchar(64);uniqueIndex:idx_auth_oidc_provider_key" json:"providerKey"`
 	DisplayName           string              `gorm:"type:varchar(255)" json:"displayName"`
-	IssuerURL             string              `gorm:"type:varchar(512);uniqueIndex:idx_auth_oidc_provider_issuer" json:"issuerUrl"`
+	IssuerURL             string              `gorm:"type:varchar(512);index:idx_auth_oidc_provider_issuer" json:"issuerUrl"`
 	ClientID              string              `gorm:"type:varchar(512)" json:"clientId"`
 	EncryptedClientSecret []byte              `gorm:"type:blob" json:"-"`
 	ClientSecretNonce     []byte              `gorm:"type:blob" json:"-"`

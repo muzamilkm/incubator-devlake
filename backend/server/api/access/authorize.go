@@ -244,12 +244,10 @@ func (s *Service) authorizeExistingUser(user *AccessUser, accessIdentity *Access
 	if err := tx.Update(accessIdentity); err != nil {
 		return nil, errors.Default.Wrap(err, "error recording access identity login")
 	}
-	user.Email = identity.Email
-	user.DisplayName = identity.DisplayName
-	user.LastLoginAt = &now
-	if err := tx.Update(user); err != nil {
+	if err := tx.UpdateColumns(user, []dal.DalSet{{ColumnName: "last_login_at", Value: &now}}, dal.Where("id = ?", user.ID)); err != nil {
 		return nil, errors.Default.Wrap(err, "error recording access user login")
 	}
+	user.LastLoginAt = &now
 	if err := tx.Commit(); err != nil {
 		return nil, errors.Default.Wrap(err, "error committing access identity login")
 	}

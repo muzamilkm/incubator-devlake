@@ -17,7 +17,13 @@ limitations under the License.
 
 package access
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/apache/incubator-devlake/core/errors"
+	mockdal "github.com/apache/incubator-devlake/mocks/core/dal"
+	"github.com/stretchr/testify/mock"
+)
 
 func TestNormalizeOIDCProviderInput(t *testing.T) {
 	testCases := []struct {
@@ -32,17 +38,23 @@ func TestNormalizeOIDCProviderInput(t *testing.T) {
 			input: OIDCProviderInput{
 				ProviderKey: "  Google-Workspace ", DisplayName: " Google ", IssuerURL: "https://accounts.example.com/ ",
 				ClientID: " client ", ClientSecret: " secret ", Scopes: "openid, profile openid email",
+				GrafanaTarget: GrafanaProviderGenericOAuth,
 			},
 			wantKey: "google-workspace", wantScope: "openid profile email",
 		},
 		{
+			name:      "rejects omitted Grafana target",
+			input:     OIDCProviderInput{ProviderKey: "google", DisplayName: "Google", IssuerURL: "https://accounts.example.com", ClientID: "client", Scopes: "openid"},
+			wantError: true,
+		},
+		{
 			name:      "rejects missing openid scope",
-			input:     OIDCProviderInput{ProviderKey: "google", DisplayName: "Google", IssuerURL: "https://accounts.example.com", ClientID: "client", Scopes: "profile email"},
+			input:     OIDCProviderInput{ProviderKey: "google", DisplayName: "Google", IssuerURL: "https://accounts.example.com", ClientID: "client", Scopes: "profile email", GrafanaTarget: GrafanaProviderGenericOAuth},
 			wantError: true,
 		},
 		{
 			name:      "rejects unsafe provider key",
-			input:     OIDCProviderInput{ProviderKey: "google/oidc", DisplayName: "Google", IssuerURL: "https://accounts.example.com", ClientID: "client", Scopes: "openid"},
+			input:     OIDCProviderInput{ProviderKey: "google/oidc", DisplayName: "Google", IssuerURL: "https://accounts.example.com", ClientID: "client", Scopes: "openid", GrafanaTarget: GrafanaProviderGenericOAuth},
 			wantError: true,
 		},
 		{
@@ -215,4 +227,46 @@ func TestGrafanaLoginPath(t *testing.T) {
 			t.Fatalf("grafanaLoginPath(%q) = %q, want %q", testCase.target, actual, testCase.want)
 		}
 	}
+}
+
+func TestEnsureIssuerAvailable(t *testing.T) {
+	t.Run("rejects active duplicate issuer", func(t *testing.T) {
+		db := &mockdal.Dal{}
+		db.On("First", mock.Anything, mock.Anything).Return(nil)
+		service := &Service{db: db}
+
+		err := service.ensureIssuerAvailable("https://accounts.google.com", 1)
+		if err == nil {
+			t.Fatal("expected error for active duplicate issuer")
+		}
+		if err.GetData() != ErrCodeInvalidProvider {
+			t.Fatalf("err code = %v, want %s", err.GetData(), ErrCodeInvalidProvider)
+		}
+	})
+
+	t.Run("allows self-update", func(t *testing.T) {
+		db := &mockdal.Dal{}
+		notFoundErr := errors.NotFound.New("not found")
+		db.On("First", mock.Anything, mock.Anything).Return(notFoundErr)
+		db.On("IsErrorNotFound", notFoundErr).Return(true)
+		service := &Service{db: db}
+
+		err := service.ensureIssuerAvailable("https://accounts.google.com", 1)
+		if err != nil {
+			t.Fatalf("expected nil error for self-update, got %v", err)
+		}
+	})
+
+	t.Run("allows recreation when previous provider is retired", func(t *testing.T) {
+		db := &mockdal.Dal{}
+		notFoundErr := errors.NotFound.New("not found")
+		db.On("First", mock.Anything, mock.Anything).Return(notFoundErr)
+		db.On("IsErrorNotFound", notFoundErr).Return(true)
+		service := &Service{db: db}
+
+		err := service.ensureIssuerAvailable("https://accounts.google.com", 0)
+		if err != nil {
+			t.Fatalf("expected nil error when previous provider is retired, got %v", err)
+		}
+	})
 }

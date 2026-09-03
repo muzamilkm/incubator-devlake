@@ -18,6 +18,7 @@ limitations under the License.
 package oidchelper
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -108,4 +109,44 @@ func flipChar(b byte) string {
 		return "B"
 	}
 	return "A"
+}
+
+func TestStatePayloadHistoricalDecodeWithoutLinkStateID(t *testing.T) {
+	now := time.Now().Truncate(time.Millisecond)
+	// Historical JSON payload minted before IdentityLinkStateID was added.
+	historicalJSON := []byte(`{"v":"google","n":"test-nonce","r":"/dashboards","p":"test-pkce-verifier","t":"` + now.Format(time.RFC3339Nano) + `"}`)
+
+	var payload StatePayload
+	if err := json.Unmarshal(historicalJSON, &payload); err != nil {
+		t.Fatalf("unmarshal historical payload: %v", err)
+	}
+	if payload.Provider != "google" || payload.Nonce != "test-nonce" || payload.ReturnURL != "/dashboards" || payload.PKCEVerifier != "test-pkce-verifier" {
+		t.Fatalf("historical payload fields mismatch: %+v", payload)
+	}
+	if payload.IdentityLinkStateID != "" {
+		t.Fatalf("expected empty IdentityLinkStateID on historical payload, got %q", payload.IdentityLinkStateID)
+	}
+
+	// Verify that marshaling a payload with empty IdentityLinkStateID omits the "l" key.
+	marshaled, err := json.Marshal(&payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if strings.Contains(string(marshaled), `"l"`) {
+		t.Fatalf("expected empty IdentityLinkStateID to be omitted, got %s", string(marshaled))
+	}
+
+	// Verify full encode/decode round trip with empty IdentityLinkStateID
+	secret := []byte("a-test-secret-with-at-least-32-bytes!")
+	encoded, err := EncodeState(secret, &payload)
+	if err != nil {
+		t.Fatalf("encode state: %v", err)
+	}
+	decoded, err := DecodeState(secret, encoded)
+	if err != nil {
+		t.Fatalf("decode state: %v", err)
+	}
+	if decoded.IdentityLinkStateID != "" {
+		t.Fatalf("expected empty IdentityLinkStateID after decode, got %q", decoded.IdentityLinkStateID)
+	}
 }

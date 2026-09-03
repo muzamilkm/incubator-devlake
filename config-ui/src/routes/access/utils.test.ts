@@ -200,6 +200,9 @@ test('creates a write-only OIDC provider form from configured state', () => {
   equal(formFromOIDCProvider(provider).clientSecret, '');
   equal(formFromOIDCProvider(provider).scopes, provider.scopes);
   equal(formFromOIDCProvider().scopes, 'openid profile email');
+  equal(formFromOIDCProvider().confirmDevlakeOnly, false);
+  equal(formFromOIDCProvider(provider).confirmDevlakeOnly, false);
+  equal(formFromOIDCProvider({ ...provider, grafanaTarget: GRAFANA_PROVIDER_KIND.NONE }).confirmDevlakeOnly, true);
 });
 
 test('maps OIDC provider errors to safe user-facing messages', () => {

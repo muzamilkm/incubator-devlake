@@ -127,7 +127,7 @@ export const formFromOIDCProvider = (provider?: OIDCProvider): OIDCProviderInput
   clientSecret: '',
   scopes: provider?.scopes ?? 'openid profile email',
   grafanaTarget: provider?.grafanaTarget ?? GRAFANA_PROVIDER_KIND.NONE,
-  confirmDevlakeOnly: provider?.grafanaTarget === GRAFANA_PROVIDER_KIND.NONE,
+  confirmDevlakeOnly: provider ? provider.grafanaTarget === GRAFANA_PROVIDER_KIND.NONE : false,
   revision: provider?.providerRevision,
 });
 

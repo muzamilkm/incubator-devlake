@@ -49,11 +49,6 @@ func normalizeOIDCProviderInput(input OIDCProviderInput) (*OIDCProvider, string,
 }
 
 func normalizeGrafanaProviderKind(kind GrafanaProviderKind, confirmDevLakeOnly bool) (GrafanaProviderKind, errors.Error) {
-	if kind == "" {
-		// Preserve the previous single-provider request contract until the
-		// provider-list UI sends an explicit target in Phase 3.
-		return GrafanaProviderGenericOAuth, nil
-	}
 	switch kind {
 	case GrafanaProviderNone:
 		if !confirmDevLakeOnly {
