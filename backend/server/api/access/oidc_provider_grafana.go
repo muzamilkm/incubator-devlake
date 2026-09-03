@@ -165,37 +165,30 @@ func (s *Service) recordGrafanaCompensationFailure(provider *OIDCProvider, cause
 }
 
 func (s *Service) persistGenericSelection(provider *OIDCProvider) errors.Error {
-	tx := s.db.Begin()
-	committed := false
-	defer func() {
-		if !committed {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				s.logger.Error(rollbackErr, "access: rollback Grafana generic OAuth selection provider=%s", provider.ProviderKey)
-			}
-		}
-	}()
-	if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{
-		{ColumnName: "grafana_target", Value: GrafanaProviderNone},
-		{ColumnName: "grafana_sync_status", Value: OIDCProviderStatusNotApplicable},
-		{ColumnName: "grafana_synced_revision", Value: uint64(0)},
-		{ColumnName: "grafana_last_error_code", Value: ""},
-	}, dal.Where("grafana_target = ? AND id <> ?", GrafanaProviderGenericOAuth, provider.ID)); err != nil {
-		return errors.Default.Wrap(err, "error clearing previous Grafana generic OAuth provider")
-	}
 	now := time.Now()
-	if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{
-		{ColumnName: "grafana_target", Value: GrafanaProviderGenericOAuth},
-		{ColumnName: "grafana_sync_status", Value: OIDCProviderStatusSynchronized},
-		{ColumnName: "grafana_synced_revision", Value: provider.Revision},
-		{ColumnName: "grafana_last_synced_at", Value: now},
-		{ColumnName: "grafana_last_error_code", Value: ""},
-	}, dal.Where("id = ?", provider.ID)); err != nil {
-		return errors.Default.Wrap(err, "error selecting Grafana generic OAuth provider")
+	err := s.withTransaction("Grafana generic OAuth selection", func(tx dal.Transaction) errors.Error {
+		if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{
+			{ColumnName: "grafana_target", Value: GrafanaProviderNone},
+			{ColumnName: "grafana_sync_status", Value: OIDCProviderStatusNotApplicable},
+			{ColumnName: "grafana_synced_revision", Value: uint64(0)},
+			{ColumnName: "grafana_last_error_code", Value: ""},
+		}, dal.Where("grafana_target = ? AND id <> ?", GrafanaProviderGenericOAuth, provider.ID)); err != nil {
+			return errors.Default.Wrap(err, "error clearing previous Grafana generic OAuth provider")
+		}
+		if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{
+			{ColumnName: "grafana_target", Value: GrafanaProviderGenericOAuth},
+			{ColumnName: "grafana_sync_status", Value: OIDCProviderStatusSynchronized},
+			{ColumnName: "grafana_synced_revision", Value: provider.Revision},
+			{ColumnName: "grafana_last_synced_at", Value: now},
+			{ColumnName: "grafana_last_error_code", Value: ""},
+		}, dal.Where("id = ?", provider.ID)); err != nil {
+			return errors.Default.Wrap(err, "error selecting Grafana generic OAuth provider")
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
-	if err := tx.Commit(); err != nil {
-		return errors.Default.Wrap(err, "error committing Grafana generic OAuth provider selection")
-	}
-	committed = true
 	provider.GrafanaTarget = GrafanaProviderGenericOAuth
 	provider.GrafanaSyncStatus = OIDCProviderStatusSynchronized
 	provider.GrafanaSyncedRevision = provider.Revision

@@ -171,75 +171,67 @@ func (s *Service) updateUser(actor string, id uint64, role, status string, hide 
 	if !hide && (!validRole(role) || !validStatus(status)) {
 		return nil, errors.BadInput.New("provide a valid role and status", errors.WithData(ErrCodeInvalidUser))
 	}
-	tx := s.db.Begin()
-	committed := false
-	defer func() {
-		if !committed {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				s.logger.Error(rollbackErr, "access: rollback user change id=%d", id)
-			}
-		}
-	}()
-
 	user := &AccessUser{}
-	if err := tx.First(user, dal.Where("id = ? AND hidden_at IS NULL", id)); err != nil {
-		if tx.IsErrorNotFound(err) {
-			return nil, errors.NotFound.New("access user not found")
-		}
-		return nil, errors.Default.Wrap(err, "error looking up access user")
-	}
-	if hide {
-		role = user.Role
-		status = StatusDisabled
-	}
-	removesActiveAdmin := user.Role == RoleCustomerAdmin && user.Status == StatusActive && (status == StatusDisabled || role != RoleCustomerAdmin)
-	if removesActiveAdmin {
-		activeAdmins, err := tx.Count(dal.From(&AccessUser{}), dal.Where("role = ? AND status = ? AND hidden_at IS NULL", RoleCustomerAdmin, StatusActive))
-		if err != nil {
-			return nil, errors.Default.Wrap(err, "error checking customer administrators")
-		}
-		if activeAdmins <= 1 {
-			return nil, errors.BadInput.New("keep at least one active customer administrator")
-		}
-	}
-	user.Role = role
-	user.Status = status
-	if status == StatusDisabled {
-		now := time.Now()
-		user.DisabledAt = &now
-	} else {
-		user.DisabledAt = nil
-	}
-	if hide {
-		now := time.Now()
-		user.HiddenAt = &now
-	}
-	if err := tx.Update(user); err != nil {
-		return nil, errors.Default.Wrap(err, "error saving access user")
-	}
 	var revokedSessionIDs []string
-	if status == StatusDisabled && s.sessionRevoker != nil {
-		identities := make([]AccessIdentity, 0)
-		if err := tx.All(&identities, dal.Where("access_user_id = ?", user.ID)); err != nil {
-			return nil, errors.Default.Wrap(err, "error reading access identities for disabled user")
-		}
-		for _, identity := range identities {
-			providerKeys, err := s.providerKeysForIssuer(tx, identity.Issuer)
-			if err != nil {
-				return nil, err
+	err := s.withTransaction("user change", func(tx dal.Transaction) errors.Error {
+		if err := tx.First(user, dal.Where("id = ? AND hidden_at IS NULL", id)); err != nil {
+			if tx.IsErrorNotFound(err) {
+				return errors.NotFound.New("access user not found")
 			}
-			ids, err := s.sessionRevoker.RevokePersistentSessions(tx, providerKeys, identity.Subject)
-			if err != nil {
-				s.logger.Error(err, "access: revoke sessions for disabled user id=%d email=%s", user.ID, user.Email)
-				return nil, errors.Default.Wrap(err, "error revoking sessions for disabled access user")
-			}
-			revokedSessionIDs = append(revokedSessionIDs, ids...)
+			return errors.Default.Wrap(err, "error looking up access user")
 		}
+		if hide {
+			role = user.Role
+			status = StatusDisabled
+		}
+		removesActiveAdmin := user.Role == RoleCustomerAdmin && user.Status == StatusActive && (status == StatusDisabled || role != RoleCustomerAdmin)
+		if removesActiveAdmin {
+			activeAdmins, err := tx.Count(dal.From(&AccessUser{}), dal.Where("role = ? AND status = ? AND hidden_at IS NULL", RoleCustomerAdmin, StatusActive))
+			if err != nil {
+				return errors.Default.Wrap(err, "error checking customer administrators")
+			}
+			if activeAdmins <= 1 {
+				return errors.BadInput.New("keep at least one active customer administrator")
+			}
+		}
+		user.Role = role
+		user.Status = status
+		if status == StatusDisabled {
+			now := time.Now()
+			user.DisabledAt = &now
+		} else {
+			user.DisabledAt = nil
+		}
+		if hide {
+			now := time.Now()
+			user.HiddenAt = &now
+		}
+		if err := tx.Update(user); err != nil {
+			return errors.Default.Wrap(err, "error saving access user")
+		}
+		if status == StatusDisabled && s.sessionRevoker != nil {
+			identities := make([]AccessIdentity, 0)
+			if err := tx.All(&identities, dal.Where("access_user_id = ?", user.ID)); err != nil {
+				return errors.Default.Wrap(err, "error reading access identities for disabled user")
+			}
+			for _, identity := range identities {
+				providerKeys, err := s.providerKeysForIssuer(tx, identity.Issuer)
+				if err != nil {
+					return err
+				}
+				ids, err := s.sessionRevoker.RevokePersistentSessions(tx, providerKeys, identity.Subject)
+				if err != nil {
+					s.logger.Error(err, "access: revoke sessions for disabled user id=%d email=%s", user.ID, user.Email)
+					return errors.Default.Wrap(err, "error revoking sessions for disabled access user")
+				}
+				revokedSessionIDs = append(revokedSessionIDs, ids...)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, errors.Default.Wrap(err, "error committing access user change")
-	}
-	committed = true
 	if s.sessionRevoker != nil && len(revokedSessionIDs) > 0 {
 		s.sessionRevoker.CacheRevokedSessions(revokedSessionIDs)
 	}

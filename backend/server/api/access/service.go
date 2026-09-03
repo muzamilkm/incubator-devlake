@@ -158,3 +158,25 @@ func ValidateConfiguration(authEnabled, oidcEnabled bool, forwardedUserSecret st
 	}
 	return nil
 }
+
+func (s *Service) withTransaction(operation string, action func(tx dal.Transaction) errors.Error) errors.Error {
+	tx := s.db.Begin()
+	committed := false
+	defer func() {
+		if !committed {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				if s.logger != nil {
+					s.logger.Error(rollbackErr, "access: rollback %s", operation)
+				}
+			}
+		}
+	}()
+	if err := action(tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return errors.Default.Wrap(err, fmt.Sprintf("error committing %s", operation))
+	}
+	committed = true
+	return nil
+}

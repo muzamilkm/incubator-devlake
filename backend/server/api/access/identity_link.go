@@ -92,62 +92,54 @@ func (s *Service) CompleteIdentityLink(stateID, providerKey string, identity Ide
 		return errors.Unauthorized.New("OIDC identity link is invalid")
 	}
 
-	tx := s.db.Begin()
-	committed := false
-	defer func() {
-		if !committed {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				s.logger.Error(rollbackErr, "access: rollback OIDC identity link")
-			}
-		}
-	}()
-
-	state := &IdentityLinkState{}
-	if err := tx.First(state, dal.Where("id = ? AND provider_key = ? AND expires_at > ? AND consumed_at IS NULL", stateID, providerKey, time.Now())); err != nil {
-		if tx.IsErrorNotFound(err) {
-			return errors.Unauthorized.New("OIDC identity link has expired or was already used")
-		}
-		return errors.Default.Wrap(err, "error reading OIDC identity link state")
-	}
-	if err := tx.Create(&IdentityLinkClaim{StateID: state.ID}); err != nil {
-		if tx.IsDuplicationError(err) {
-			return errors.Unauthorized.New("OIDC identity link has expired or was already used")
-		}
-		return errors.Default.Wrap(err, "error claiming OIDC identity link state")
-	}
-
 	user := &AccessUser{}
-	if err := tx.First(user, dal.Where("id = ?", state.AccessUserID)); err != nil {
-		if tx.IsErrorNotFound(err) {
-			return errors.Unauthorized.New("this account is not allowed to access DevLake")
+	err := s.withTransaction("OIDC identity link", func(tx dal.Transaction) errors.Error {
+		state := &IdentityLinkState{}
+		if err := tx.First(state, dal.Where("id = ? AND provider_key = ? AND expires_at > ? AND consumed_at IS NULL", stateID, providerKey, time.Now())); err != nil {
+			if tx.IsErrorNotFound(err) {
+				return errors.Unauthorized.New("OIDC identity link has expired or was already used")
+			}
+			return errors.Default.Wrap(err, "error reading OIDC identity link state")
 		}
-		return errors.Default.Wrap(err, "error reading access user for OIDC identity link")
-	}
-	if user.HiddenAt != nil || user.Status != StatusActive {
-		return errors.Unauthorized.New("this account is disabled")
-	}
+		if err := tx.Create(&IdentityLinkClaim{StateID: state.ID}); err != nil {
+			if tx.IsDuplicationError(err) {
+				return errors.Unauthorized.New("OIDC identity link has expired or was already used")
+			}
+			return errors.Default.Wrap(err, "error claiming OIDC identity link state")
+		}
 
-	existing := &AccessIdentity{}
-	if err := tx.First(existing, dal.Where("issuer = ? AND subject = ?", identity.Issuer, identity.Subject)); err == nil {
-		return errors.BadInput.New("this OIDC identity is already linked", errors.WithData(ErrCodeIdentityLinked))
-	} else if !tx.IsErrorNotFound(err) {
-		return errors.Default.Wrap(err, "error reading existing OIDC identity")
-	}
+		if err := tx.First(user, dal.Where("id = ?", state.AccessUserID)); err != nil {
+			if tx.IsErrorNotFound(err) {
+				return errors.Unauthorized.New("this account is not allowed to access DevLake")
+			}
+			return errors.Default.Wrap(err, "error reading access user for OIDC identity link")
+		}
+		if user.HiddenAt != nil || user.Status != StatusActive {
+			return errors.Unauthorized.New("this account is disabled")
+		}
 
-	now := time.Now()
-	if err := tx.Create(newAccessIdentity(user.ID, identity, now)); err != nil {
-		if tx.IsDuplicationError(err) {
+		existing := &AccessIdentity{}
+		if err := tx.First(existing, dal.Where("issuer = ? AND subject = ?", identity.Issuer, identity.Subject)); err == nil {
 			return errors.BadInput.New("this OIDC identity is already linked", errors.WithData(ErrCodeIdentityLinked))
+		} else if !tx.IsErrorNotFound(err) {
+			return errors.Default.Wrap(err, "error reading existing OIDC identity")
 		}
-		return errors.Default.Wrap(err, "error creating linked OIDC identity")
+
+		now := time.Now()
+		if err := tx.Create(newAccessIdentity(user.ID, identity, now)); err != nil {
+			if tx.IsDuplicationError(err) {
+				return errors.BadInput.New("this OIDC identity is already linked", errors.WithData(ErrCodeIdentityLinked))
+			}
+			return errors.Default.Wrap(err, "error creating linked OIDC identity")
+		}
+		if err := tx.UpdateColumns(&IdentityLinkState{}, []dal.DalSet{{ColumnName: "consumed_at", Value: now}}, dal.Where("id = ?", state.ID)); err != nil {
+			return errors.Default.Wrap(err, "error consuming OIDC identity link state")
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
-	if err := tx.UpdateColumns(&IdentityLinkState{}, []dal.DalSet{{ColumnName: "consumed_at", Value: now}}, dal.Where("id = ?", state.ID)); err != nil {
-		return errors.Default.Wrap(err, "error consuming OIDC identity link state")
-	}
-	if err := tx.Commit(); err != nil {
-		return errors.Default.Wrap(err, "error committing OIDC identity link")
-	}
-	committed = true
 	s.audit(user.Email, "identity.linked", user, "provider="+providerKey)
 	return nil
 }

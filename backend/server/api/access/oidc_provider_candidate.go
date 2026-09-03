@@ -28,16 +28,6 @@ import (
 // runtime provider. New and disabled providers can be stored directly because
 // they are not admitting interactive users yet.
 func (s *Service) persistOIDCCandidate(provider *OIDCProvider, prepared *PreparedOIDCProvider, current *OIDCProvider) (*OIDCProvider, errors.Error) {
-	tx := s.db.Begin()
-	committed := false
-	defer func() {
-		if !committed {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				s.logger.Error(rollbackErr, "access: rollback OIDC provider candidate provider=%s", provider.ProviderKey)
-			}
-		}
-	}()
-
 	now := time.Now()
 	provider.EncryptedClientSecret = prepared.EncryptedClientSecret
 	provider.ClientSecretNonce = prepared.ClientSecretNonce
@@ -47,46 +37,47 @@ func (s *Service) persistOIDCCandidate(provider *OIDCProvider, prepared *Prepare
 	provider.GrafanaLastSyncedAt = nil
 	provider.GrafanaLastErrorCode = ""
 
-	if current == nil {
-		provider.Revision = 1
-		provider.CreatedAt = now
-		provider.UpdatedAt = now
-		if err := tx.Create(provider); err != nil {
-			return nil, errors.Default.Wrap(err, "error creating OIDC provider")
+	err := s.withTransaction("OIDC provider candidate", func(tx dal.Transaction) errors.Error {
+		if current == nil {
+			provider.Revision = 1
+			provider.CreatedAt = now
+			provider.UpdatedAt = now
+			if err := tx.Create(provider); err != nil {
+				return errors.Default.Wrap(err, "error creating OIDC provider")
+			}
+		} else if current.Enabled {
+			candidate := oidcCandidateFromProvider(provider, current.ID, current.Revision+1, now)
+			if err := tx.Create(candidate); err != nil {
+				return errors.Default.Wrap(err, "error creating OIDC provider candidate")
+			}
+			if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{
+				{ColumnName: "revision", Value: candidate.Revision},
+				{ColumnName: "grafana_sync_status", Value: provider.GrafanaSyncStatus},
+				{ColumnName: "grafana_synced_revision", Value: uint64(0)},
+				{ColumnName: "grafana_last_synced_at", Value: nil},
+				{ColumnName: "grafana_last_error_code", Value: ""},
+			}, dal.Where("id = ?", current.ID)); err != nil {
+				return errors.Default.Wrap(err, "error recording OIDC provider candidate")
+			}
+			provider.ID = current.ID
+			provider.CreatedAt = current.CreatedAt
+			provider.Enabled = current.Enabled
+			provider.Revision = candidate.Revision
+		} else {
+			provider.ID = current.ID
+			provider.CreatedAt = current.CreatedAt
+			provider.Enabled = current.Enabled
+			provider.Revision = current.Revision + 1
+			provider.UpdatedAt = now
+			if err := tx.Update(provider); err != nil {
+				return errors.Default.Wrap(err, "error updating OIDC provider")
+			}
 		}
-	} else if current.Enabled {
-		candidate := oidcCandidateFromProvider(provider, current.ID, current.Revision+1, now)
-		if err := tx.Create(candidate); err != nil {
-			return nil, errors.Default.Wrap(err, "error creating OIDC provider candidate")
-		}
-		if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{
-			{ColumnName: "revision", Value: candidate.Revision},
-			{ColumnName: "grafana_sync_status", Value: provider.GrafanaSyncStatus},
-			{ColumnName: "grafana_synced_revision", Value: uint64(0)},
-			{ColumnName: "grafana_last_synced_at", Value: nil},
-			{ColumnName: "grafana_last_error_code", Value: ""},
-		}, dal.Where("id = ?", current.ID)); err != nil {
-			return nil, errors.Default.Wrap(err, "error recording OIDC provider candidate")
-		}
-		provider.ID = current.ID
-		provider.CreatedAt = current.CreatedAt
-		provider.Enabled = current.Enabled
-		provider.Revision = candidate.Revision
-	} else {
-		provider.ID = current.ID
-		provider.CreatedAt = current.CreatedAt
-		provider.Enabled = current.Enabled
-		provider.Revision = current.Revision + 1
-		provider.UpdatedAt = now
-		if err := tx.Update(provider); err != nil {
-			return nil, errors.Default.Wrap(err, "error updating OIDC provider")
-		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, errors.Default.Wrap(err, "error committing OIDC provider candidate")
-	}
-	committed = true
 	return provider, nil
 }
 

@@ -114,29 +114,37 @@ func (s *Service) bootstrap(identity Identity) (*Principal, errors.Error) {
 	if s.cfg.BootstrapAdminEmail == "" || identity.Email != s.cfg.BootstrapAdminEmail {
 		return nil, nil
 	}
-	tx := s.db.Begin()
-	finished := false
-	defer func() {
-		if !finished {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				s.logger.Error(rollbackErr, "access: rollback bootstrap administrator claim")
-			}
+	var user *AccessUser
+	err := s.withTransaction("bootstrap administrator", func(tx dal.Transaction) errors.Error {
+		count, err := tx.Count(dal.From(&AccessUser{}))
+		if err != nil {
+			return errors.Default.Wrap(err, "error checking access bootstrap state")
 		}
-	}()
-
-	count, err := tx.Count(dal.From(&AccessUser{}))
-	if err != nil {
-		return nil, errors.Default.Wrap(err, "error checking access bootstrap state")
-	}
-	if count != 0 {
-		return nil, nil
-	}
-	if err := tx.Create(&BootstrapClaim{Key: bootstrapClaimKey}); err != nil {
-		if tx.IsDuplicationError(err) {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				return nil, errors.Default.Wrap(rollbackErr, "error rolling back bootstrap administrator claim")
+		if count != 0 {
+			return nil
+		}
+		if err := tx.Create(&BootstrapClaim{Key: bootstrapClaimKey}); err != nil {
+			if tx.IsDuplicationError(err) {
+				return err
 			}
-			finished = true
+			return errors.Default.Wrap(err, "error claiming bootstrap administrator")
+		}
+		now := time.Now()
+		u := &AccessUser{
+			Issuer: identity.Issuer, Subject: identity.Subject, Email: identity.Email,
+			DisplayName: identity.DisplayName, Role: RoleCustomerAdmin, Status: StatusActive, LastLoginAt: &now,
+		}
+		if err := tx.Create(u); err != nil {
+			return errors.Default.Wrap(err, "error creating bootstrap administrator")
+		}
+		if err := tx.Create(newAccessIdentity(u.ID, identity, now)); err != nil {
+			return errors.Default.Wrap(err, "error creating bootstrap administrator identity")
+		}
+		user = u
+		return nil
+	})
+	if err != nil {
+		if s.db.IsDuplicationError(err) {
 			existing, existingIdentity, lookupErr := s.userForIdentity(s.db, identity)
 			if lookupErr == nil {
 				return s.authorizeExistingUser(existing, existingIdentity, identity)
@@ -145,23 +153,11 @@ func (s *Service) bootstrap(identity Identity) (*Principal, errors.Error) {
 			}
 			return nil, errors.Unauthorized.New("the bootstrap administrator has already been claimed")
 		}
-		return nil, errors.Default.Wrap(err, "error claiming bootstrap administrator")
+		return nil, err
 	}
-	now := time.Now()
-	user := &AccessUser{
-		Issuer: identity.Issuer, Subject: identity.Subject, Email: identity.Email,
-		DisplayName: identity.DisplayName, Role: RoleCustomerAdmin, Status: StatusActive, LastLoginAt: &now,
+	if user == nil {
+		return nil, nil
 	}
-	if err := tx.Create(user); err != nil {
-		return nil, errors.Default.Wrap(err, "error creating bootstrap administrator")
-	}
-	if err := tx.Create(newAccessIdentity(user.ID, identity, now)); err != nil {
-		return nil, errors.Default.Wrap(err, "error creating bootstrap administrator identity")
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, errors.Default.Wrap(err, "error committing bootstrap administrator")
-	}
-	finished = true
 	s.audit(identity.Email, "bootstrap.consumed", user, "")
 	s.logger.Info("access: bootstrap administrator provisioned email=%s", identity.Email)
 	return &Principal{UserID: user.ID, Role: user.Role}, nil
@@ -171,56 +167,52 @@ func (s *Service) bootstrap(identity Identity) (*Principal, errors.Error) {
 // identity. A concurrent claimant can update only an unclaimed row; the final
 // read authorizes the winner and rejects every other identity.
 func (s *Service) claimInvitation(identity Identity) (*AccessUser, bool, errors.Error) {
-	tx := s.db.Begin()
-	finished := false
-	defer func() {
-		if !finished {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				s.logger.Error(rollbackErr, "access: rollback invitation claim email=%s", identity.Email)
+	var claimed *AccessUser
+	err := s.withTransaction("invitation claim", func(tx dal.Transaction) errors.Error {
+		invitation := &AccessUser{}
+		err := tx.First(invitation, dal.Where("issuer = ? AND subject = ? AND hidden_at IS NULL", "", invitationSubject(identity.Email)))
+		if err != nil {
+			if tx.IsErrorNotFound(err) {
+				return nil
 			}
+			return errors.Default.Wrap(err, "error looking up invited access user")
 		}
-	}()
-
-	invitation := &AccessUser{}
-	err := tx.First(invitation, dal.Where("issuer = ? AND subject = ? AND hidden_at IS NULL", "", invitationSubject(identity.Email)))
+		now := time.Now()
+		if err := tx.UpdateColumns(
+			&AccessUser{},
+			[]dal.DalSet{
+				{ColumnName: "issuer", Value: identity.Issuer},
+				{ColumnName: "subject", Value: identity.Subject},
+				{ColumnName: "email", Value: identity.Email},
+				{ColumnName: "display_name", Value: identity.DisplayName},
+				{ColumnName: "last_login_at", Value: now},
+			},
+			dal.Where("id = ? AND issuer = ? AND subject = ?", invitation.ID, "", invitationSubject(identity.Email)),
+		); err != nil {
+			return errors.Default.Wrap(err, "error claiming invited access user")
+		}
+		c := &AccessUser{}
+		if err := tx.First(c, dal.Where("id = ?", invitation.ID)); err != nil {
+			return errors.Default.Wrap(err, "error reading claimed access user")
+		}
+		if c.Issuer != identity.Issuer || c.Subject != identity.Subject {
+			return errors.Unauthorized.New("this invitation has already been claimed")
+		}
+		if err := tx.Create(newAccessIdentity(c.ID, identity, now)); err != nil {
+			if tx.IsDuplicationError(err) {
+				return errors.Unauthorized.New("this OIDC identity is already linked to another account")
+			}
+			return errors.Default.Wrap(err, "error creating invited access identity")
+		}
+		claimed = c
+		return nil
+	})
 	if err != nil {
-		if tx.IsErrorNotFound(err) {
-			return nil, false, nil
-		}
-		return nil, false, errors.Default.Wrap(err, "error looking up invited access user")
+		return nil, false, err
 	}
-	now := time.Now()
-	if err := tx.UpdateColumns(
-		&AccessUser{},
-		[]dal.DalSet{
-			{ColumnName: "issuer", Value: identity.Issuer},
-			{ColumnName: "subject", Value: identity.Subject},
-			{ColumnName: "email", Value: identity.Email},
-			{ColumnName: "display_name", Value: identity.DisplayName},
-			{ColumnName: "last_login_at", Value: now},
-		},
-		dal.Where("id = ? AND issuer = ? AND subject = ?", invitation.ID, "", invitationSubject(identity.Email)),
-	); err != nil {
-		return nil, false, errors.Default.Wrap(err, "error claiming invited access user")
+	if claimed == nil {
+		return nil, false, nil
 	}
-	claimed := &AccessUser{}
-	if err := tx.First(claimed, dal.Where("id = ?", invitation.ID)); err != nil {
-		return nil, false, errors.Default.Wrap(err, "error reading claimed access user")
-	}
-	if claimed.Issuer != identity.Issuer || claimed.Subject != identity.Subject {
-		return nil, false, errors.Unauthorized.New("this invitation has already been claimed")
-	}
-	if err := tx.Create(newAccessIdentity(claimed.ID, identity, now)); err != nil {
-		if tx.IsDuplicationError(err) {
-			return nil, false, errors.Unauthorized.New("this OIDC identity is already linked to another account")
-		}
-		return nil, false, errors.Default.Wrap(err, "error creating invited access identity")
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, false, errors.Default.Wrap(err, "error committing invited access user claim")
-	}
-	finished = true
-
 	return claimed, true, nil
 }
 
@@ -229,29 +221,22 @@ func (s *Service) authorizeExistingUser(user *AccessUser, accessIdentity *Access
 		return nil, errors.Unauthorized.New("this account is disabled")
 	}
 	now := time.Now()
-	tx := s.db.Begin()
-	committed := false
-	defer func() {
-		if !committed {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				s.logger.Error(rollbackErr, "access: rollback identity login user_id=%d", user.ID)
-			}
+	err := s.withTransaction("identity login", func(tx dal.Transaction) errors.Error {
+		accessIdentity.VerifiedEmail = identity.Email
+		accessIdentity.DisplayName = identity.DisplayName
+		accessIdentity.LastLoginAt = &now
+		if err := tx.Update(accessIdentity); err != nil {
+			return errors.Default.Wrap(err, "error recording access identity login")
 		}
-	}()
-	accessIdentity.VerifiedEmail = identity.Email
-	accessIdentity.DisplayName = identity.DisplayName
-	accessIdentity.LastLoginAt = &now
-	if err := tx.Update(accessIdentity); err != nil {
-		return nil, errors.Default.Wrap(err, "error recording access identity login")
-	}
-	if err := tx.UpdateColumns(user, []dal.DalSet{{ColumnName: "last_login_at", Value: &now}}, dal.Where("id = ?", user.ID)); err != nil {
-		return nil, errors.Default.Wrap(err, "error recording access user login")
+		if err := tx.UpdateColumns(user, []dal.DalSet{{ColumnName: "last_login_at", Value: &now}}, dal.Where("id = ?", user.ID)); err != nil {
+			return errors.Default.Wrap(err, "error recording access user login")
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	user.LastLoginAt = &now
-	if err := tx.Commit(); err != nil {
-		return nil, errors.Default.Wrap(err, "error committing access identity login")
-	}
-	committed = true
 	return &Principal{UserID: user.ID, Role: user.Role}, nil
 }
 
@@ -289,27 +274,13 @@ func (s *Service) AuthorizeSession(identity Identity) (*Principal, errors.Error)
 }
 
 func (s *Service) createUserWithIdentity(user *AccessUser, identity Identity) errors.Error {
-	tx := s.db.Begin()
-	committed := false
-	defer func() {
-		if !committed {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				s.logger.Error(rollbackErr, "access: rollback access user identity creation email=%s", identity.Email)
-			}
+	return s.withTransaction("user creation", func(tx dal.Transaction) errors.Error {
+		if err := tx.Create(user); err != nil {
+			return err
 		}
-	}()
-	if err := tx.Create(user); err != nil {
-		return err
-	}
-	now := time.Now()
-	if err := tx.Create(newAccessIdentity(user.ID, identity, now)); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+		now := time.Now()
+		return tx.Create(newAccessIdentity(user.ID, identity, now))
+	})
 }
 
 func newAccessIdentity(userID uint64, identity Identity, linkedAt time.Time) *AccessIdentity {

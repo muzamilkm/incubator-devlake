@@ -164,45 +164,38 @@ func (s *Service) RetireOIDCProvider(ctx context.Context, actor, providerKey str
 }
 
 func (s *Service) activateOIDCProvider(provider *OIDCProvider, candidate *OIDCProviderCandidate) errors.Error {
-	tx := s.db.Begin()
-	committed := false
-	defer func() {
-		if !committed {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				s.logger.Error(rollbackErr, "access: rollback OIDC provider activation provider=%s", provider.ProviderKey)
-			}
-		}
-	}()
 	now := time.Now()
-	if candidate != nil {
-		if err := tx.UpdateColumns(&OIDCProvider{}, providerPromotionSets(candidate), dal.Where("id = ?", provider.ID)); err != nil {
-			return errors.Default.Wrap(err, "error promoting OIDC provider candidate")
-		}
-		if err := tx.UpdateColumns(&OIDCProviderCandidate{}, []dal.DalSet{{ColumnName: "promoted_at", Value: now}}, dal.Where("id = ?", candidate.ID)); err != nil {
-			return errors.Default.Wrap(err, "error recording OIDC provider candidate promotion")
-		}
-	}
-	if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{{ColumnName: "enabled", Value: true}}, dal.Where("id = ? AND retired_at IS NULL", provider.ID)); err != nil {
-		return errors.Default.Wrap(err, "error enabling OIDC provider")
-	}
-	cfg := &OIDCProviderConfiguration{}
-	if err := tx.First(cfg, dal.Where("id = ?", OIDCProviderSourceKey)); err != nil {
-		if tx.IsErrorNotFound(err) {
-			if createErr := tx.Create(&OIDCProviderConfiguration{ID: OIDCProviderSourceKey, ActivatedAt: &now}); createErr != nil {
-				return errors.Default.Wrap(createErr, "error creating database OIDC configuration")
+	err := s.withTransaction("OIDC provider activation", func(tx dal.Transaction) errors.Error {
+		if candidate != nil {
+			if err := tx.UpdateColumns(&OIDCProvider{}, providerPromotionSets(candidate), dal.Where("id = ?", provider.ID)); err != nil {
+				return errors.Default.Wrap(err, "error promoting OIDC provider candidate")
 			}
-		} else {
-			return errors.Default.Wrap(err, "error reading database OIDC configuration")
+			if err := tx.UpdateColumns(&OIDCProviderCandidate{}, []dal.DalSet{{ColumnName: "promoted_at", Value: now}}, dal.Where("id = ?", candidate.ID)); err != nil {
+				return errors.Default.Wrap(err, "error recording OIDC provider candidate promotion")
+			}
 		}
-	} else if cfg.ActivatedAt == nil {
-		if updateErr := tx.UpdateColumns(&OIDCProviderConfiguration{}, []dal.DalSet{{ColumnName: "activated_at", Value: now}}, dal.Where("id = ?", OIDCProviderSourceKey)); updateErr != nil {
-			return errors.Default.Wrap(updateErr, "error activating database OIDC source")
+		if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{{ColumnName: "enabled", Value: true}}, dal.Where("id = ? AND retired_at IS NULL", provider.ID)); err != nil {
+			return errors.Default.Wrap(err, "error enabling OIDC provider")
 		}
+		cfg := &OIDCProviderConfiguration{}
+		if err := tx.First(cfg, dal.Where("id = ?", OIDCProviderSourceKey)); err != nil {
+			if tx.IsErrorNotFound(err) {
+				if createErr := tx.Create(&OIDCProviderConfiguration{ID: OIDCProviderSourceKey, ActivatedAt: &now}); createErr != nil {
+					return errors.Default.Wrap(createErr, "error creating database OIDC configuration")
+				}
+			} else {
+				return errors.Default.Wrap(err, "error reading database OIDC configuration")
+			}
+		} else if cfg.ActivatedAt == nil {
+			if updateErr := tx.UpdateColumns(&OIDCProviderConfiguration{}, []dal.DalSet{{ColumnName: "activated_at", Value: now}}, dal.Where("id = ?", OIDCProviderSourceKey)); updateErr != nil {
+				return errors.Default.Wrap(updateErr, "error activating database OIDC source")
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
-	if err := tx.Commit(); err != nil {
-		return errors.Default.Wrap(err, "error committing OIDC provider activation")
-	}
-	committed = true
 	provider.Enabled = true
 	if candidate != nil {
 		applyCandidate(provider, candidate)
@@ -234,26 +227,21 @@ func (s *Service) setOIDCProviderEnabled(ctx context.Context, actor string, prov
 	if s.oidcRuntime == nil {
 		return nil, errors.Unavailable.New("OIDC provider administration is not configured", errors.WithData(ErrCodeProviderBlocked))
 	}
-	tx := s.db.Begin()
-	committed := false
-	defer func() {
-		if !committed {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				s.logger.Error(rollbackErr, "access: rollback OIDC provider enabled state provider=%s", provider.ProviderKey)
-			}
+	var revokedIDs []string
+	err := s.withTransaction("OIDC provider enabled state", func(tx dal.Transaction) errors.Error {
+		if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{{ColumnName: "enabled", Value: enabled}}, dal.Where("id = ? AND retired_at IS NULL", provider.ID)); err != nil {
+			return errors.Default.Wrap(err, "error updating OIDC provider enabled state")
 		}
-	}()
-	if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{{ColumnName: "enabled", Value: enabled}}, dal.Where("id = ? AND retired_at IS NULL", provider.ID)); err != nil {
-		return nil, errors.Default.Wrap(err, "error updating OIDC provider enabled state")
+		ids, revokeErr := s.oidcRuntime.RevokeProviderSessions(tx, provider.ProviderKey)
+		if revokeErr != nil {
+			return errors.Default.Wrap(revokeErr, "error revoking OIDC provider sessions")
+		}
+		revokedIDs = ids
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	revokedIDs, revokeErr := s.oidcRuntime.RevokeProviderSessions(tx, provider.ProviderKey)
-	if revokeErr != nil {
-		return nil, errors.Default.Wrap(revokeErr, "error revoking OIDC provider sessions")
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, errors.Default.Wrap(err, "error committing OIDC provider enabled state")
-	}
-	committed = true
 	provider.Enabled = enabled
 	s.oidcRuntime.CacheRevokedSessions(revokedIDs)
 	if refreshErr := s.oidcRuntime.RefreshOIDCProvider(ctx); refreshErr != nil && enabled {
@@ -271,27 +259,22 @@ func (s *Service) setOIDCProviderRetired(ctx context.Context, actor string, prov
 	if s.oidcRuntime == nil {
 		return nil, errors.Unavailable.New("OIDC provider administration is not configured", errors.WithData(ErrCodeProviderBlocked))
 	}
-	tx := s.db.Begin()
-	committed := false
-	defer func() {
-		if !committed {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				s.logger.Error(rollbackErr, "access: rollback OIDC provider retirement provider=%s", provider.ProviderKey)
-			}
-		}
-	}()
 	now := time.Now()
-	if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{{ColumnName: "enabled", Value: false}, {ColumnName: "retired_at", Value: now}}, dal.Where("id = ? AND retired_at IS NULL", provider.ID)); err != nil {
-		return nil, errors.Default.Wrap(err, "error retiring OIDC provider")
+	var revokedIDs []string
+	err := s.withTransaction("OIDC provider retirement", func(tx dal.Transaction) errors.Error {
+		if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{{ColumnName: "enabled", Value: false}, {ColumnName: "retired_at", Value: now}}, dal.Where("id = ? AND retired_at IS NULL", provider.ID)); err != nil {
+			return errors.Default.Wrap(err, "error retiring OIDC provider")
+		}
+		ids, revokeErr := s.oidcRuntime.RevokeProviderSessions(tx, provider.ProviderKey)
+		if revokeErr != nil {
+			return errors.Default.Wrap(revokeErr, "error revoking OIDC provider sessions")
+		}
+		revokedIDs = ids
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	revokedIDs, revokeErr := s.oidcRuntime.RevokeProviderSessions(tx, provider.ProviderKey)
-	if revokeErr != nil {
-		return nil, errors.Default.Wrap(revokeErr, "error revoking OIDC provider sessions")
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, errors.Default.Wrap(err, "error committing OIDC provider retirement")
-	}
-	committed = true
 	provider.Enabled = false
 	provider.RetiredAt = &now
 	s.oidcRuntime.CacheRevokedSessions(revokedIDs)
