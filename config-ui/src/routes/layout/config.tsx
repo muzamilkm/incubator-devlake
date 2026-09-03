@@ -101,15 +101,13 @@ type HeaderItem = {
   link: string;
   label: string;
   icon: React.ReactNode;
-  dashboard?: boolean;
 };
 
 export const headerItems: HeaderItem[] = [
   {
-    link: '/grafana/',
+    link: '/api/access/grafana-login',
     label: 'Dashboards',
     icon: <DashboardOutlined />,
-    dashboard: true,
   },
   {
     link: DOC_URL.TUTORIAL,

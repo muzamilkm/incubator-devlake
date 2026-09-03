@@ -38,16 +38,6 @@ const (
 	auditProviderGrafanaTargetSelected     = "provider.grafana_target_selected"
 )
 
-// GetOIDCProvider remains the compatibility endpoint for the pre-list Config
-// UI. Phase 3 uses GetOIDCProviders and a provider key for all mutations.
-func (s *Service) GetOIDCProvider() (*OIDCProviderResponse, errors.Error) {
-	providers, err := s.GetOIDCProviders()
-	if err != nil || len(providers) == 0 {
-		return &OIDCProviderResponse{GrafanaSyncStatus: OIDCProviderStatusPending}, err
-	}
-	return providers[0], nil
-}
-
 func (s *Service) GetOIDCProviders() ([]*OIDCProviderResponse, errors.Error) {
 	providers := make([]OIDCProvider, 0)
 	if err := s.db.All(&providers, dal.Where("retired_at IS NULL"), dal.Orderby("provider_key ASC")); err != nil {
@@ -139,7 +129,7 @@ func (s *Service) SaveOIDCProvider(ctx context.Context, actor string, input OIDC
 	if persisted.GrafanaTarget != GrafanaProviderNone && (current == nil || !current.Enabled) {
 		if syncErr := s.syncGrafana(ctx, persisted, prepared.GrafanaSettings, false); syncErr != nil {
 			s.audit(actor, auditProviderGrafanaSyncFailed, nil, providerAuditDetail(persisted.ProviderKey))
-			return s.providerResponse(persisted), syncErr
+			return s.providerResponse(persisted), errors.Unavailable.Wrap(syncErr, "OIDC provider saved, but Grafana OAuth synchronization failed", errors.WithData(ErrCodeGrafanaSyncFailed))
 		}
 		s.audit(actor, auditProviderGrafanaSyncSucceeded, nil, providerAuditDetail(persisted.ProviderKey))
 	}
@@ -226,17 +216,6 @@ func (s *Service) databaseOIDCConfiguration() (*OIDCProviderConfiguration, error
 		return nil, errors.Default.Wrap(err, "error reading OIDC provider configuration")
 	}
 	return configuration, nil
-}
-
-func (s *Service) singleOIDCProviderKey() (string, errors.Error) {
-	providers, err := s.GetOIDCProviders()
-	if err != nil {
-		return "", err
-	}
-	if len(providers) != 1 {
-		return "", errors.BadInput.New("select an OIDC provider before performing this action", errors.WithData(ErrCodeProviderBlocked))
-	}
-	return providers[0].ProviderKey, nil
 }
 
 func normalizeOIDCProviderKey(value string) (string, errors.Error) {

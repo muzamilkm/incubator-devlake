@@ -20,6 +20,7 @@ package access
 import (
 	"testing"
 
+	"github.com/apache/incubator-devlake/core/dal"
 	"github.com/apache/incubator-devlake/core/errors"
 	mockdal "github.com/apache/incubator-devlake/mocks/core/dal"
 	"github.com/stretchr/testify/mock"
@@ -41,6 +42,15 @@ func TestNormalizeOIDCProviderInput(t *testing.T) {
 				GrafanaTarget: GrafanaProviderGenericOAuth,
 			},
 			wantKey: "google-workspace", wantScope: "openid profile email",
+		},
+		{
+			name: "normalizes mixed comma and space delimiters in scopes",
+			input: OIDCProviderInput{
+				ProviderKey: "mixed-delim", DisplayName: "Mixed Delim", IssuerURL: "https://accounts.example.com",
+				ClientID: "client", ClientSecret: "secret", Scopes: "openid, profile email",
+				GrafanaTarget: GrafanaProviderGenericOAuth,
+			},
+			wantKey: "mixed-delim", wantScope: "openid profile email",
 		},
 		{
 			name:      "rejects omitted Grafana target",
@@ -269,4 +279,64 @@ func TestEnsureIssuerAvailable(t *testing.T) {
 			t.Fatalf("expected nil error when previous provider is retired, got %v", err)
 		}
 	})
+}
+
+func TestPersistGenericSelectionResetsDemotedProviderState(t *testing.T) {
+	db := &mockdal.Dal{}
+	tx := &mockdal.Transaction{}
+
+	db.On("Begin").Return(tx)
+	tx.On("Rollback").Return(nil)
+	tx.On("Commit").Return(nil)
+
+	var demoteSets []dal.DalSet
+	tx.On("UpdateColumns", mock.AnythingOfType("*access.OIDCProvider"), mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+		sets := args.Get(1).([]dal.DalSet)
+		// Capture the first update which demotes previous generic providers
+		if len(demoteSets) == 0 {
+			demoteSets = sets
+		}
+	}).Return(nil)
+
+	service := &Service{db: db}
+	newProvider := &OIDCProvider{
+		ProviderKey: "okta",
+		Revision:    3,
+	}
+	newProvider.ID = 2
+
+	err := service.persistGenericSelection(newProvider)
+	if err != nil {
+		t.Fatalf("persistGenericSelection() error = %v", err)
+	}
+
+	// Verify demoted provider sets contain target: none, sync_status: not_applicable, synced_revision: 0
+	setMap := make(map[string]interface{})
+	for _, s := range demoteSets {
+		setMap[s.ColumnName] = s.Value
+	}
+
+	if setMap["grafana_target"] != GrafanaProviderNone {
+		t.Fatalf("demoted grafana_target = %v, want %s", setMap["grafana_target"], GrafanaProviderNone)
+	}
+	if setMap["grafana_sync_status"] != OIDCProviderStatusNotApplicable {
+		t.Fatalf("demoted grafana_sync_status = %v, want %s", setMap["grafana_sync_status"], OIDCProviderStatusNotApplicable)
+	}
+	if setMap["grafana_synced_revision"] != uint64(0) {
+		t.Fatalf("demoted grafana_synced_revision = %v, want 0", setMap["grafana_synced_revision"])
+	}
+	if setMap["grafana_last_error_code"] != "" {
+		t.Fatalf("demoted grafana_last_error_code = %v, want empty string", setMap["grafana_last_error_code"])
+	}
+
+	// Verify newly selected provider fields
+	if newProvider.GrafanaTarget != GrafanaProviderGenericOAuth {
+		t.Fatalf("newProvider.GrafanaTarget = %v, want %s", newProvider.GrafanaTarget, GrafanaProviderGenericOAuth)
+	}
+	if newProvider.GrafanaSyncStatus != OIDCProviderStatusSynchronized {
+		t.Fatalf("newProvider.GrafanaSyncStatus = %v, want %s", newProvider.GrafanaSyncStatus, OIDCProviderStatusSynchronized)
+	}
+	if newProvider.GrafanaSyncedRevision != 3 {
+		t.Fatalf("newProvider.GrafanaSyncedRevision = %v, want 3", newProvider.GrafanaSyncedRevision)
+	}
 }

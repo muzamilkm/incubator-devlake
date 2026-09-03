@@ -224,7 +224,11 @@ func (s *Service) updateUser(actor string, id uint64, role, status string, hide 
 			return nil, errors.Default.Wrap(err, "error reading access identities for disabled user")
 		}
 		for _, identity := range identities {
-			ids, err := s.sessionRevoker.RevokePersistentSessions(tx, identity.Issuer, identity.Subject)
+			providerKeys, err := s.providerKeysForIssuer(tx, identity.Issuer)
+			if err != nil {
+				return nil, err
+			}
+			ids, err := s.sessionRevoker.RevokePersistentSessions(tx, providerKeys, identity.Subject)
 			if err != nil {
 				s.logger.Error(err, "access: revoke sessions for disabled user id=%d email=%s", user.ID, user.Email)
 				return nil, errors.Default.Wrap(err, "error revoking sessions for disabled access user")
@@ -267,4 +271,16 @@ func (s *Service) HideDomain(actor string, id uint64) (*AccessDomain, errors.Err
 	}
 	s.audit(actor, "domain.hidden", nil, domainAuditDetail(domain.Domain))
 	return domain, nil
+}
+
+func (s *Service) providerKeysForIssuer(tx dal.Transaction, issuer string) ([]string, errors.Error) {
+	providers := make([]OIDCProvider, 0)
+	if err := tx.All(&providers, dal.Where("issuer_url = ?", issuer)); err != nil {
+		return nil, errors.Default.Wrap(err, "error reading providers for issuer")
+	}
+	keys := make([]string, 0, len(providers))
+	for _, p := range providers {
+		keys = append(keys, p.ProviderKey)
+	}
+	return keys, nil
 }

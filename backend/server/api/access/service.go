@@ -39,7 +39,7 @@ type Config struct {
 // disable. It returns the affected session IDs so the auth service can update its
 // in-memory cache only after the transaction commits.
 type SessionRevoker interface {
-	RevokePersistentSessions(tx dal.Transaction, issuer, subject string) ([]string, errors.Error)
+	RevokePersistentSessions(tx dal.Transaction, providerKeys []string, subject string) ([]string, errors.Error)
 	CacheRevokedSessions(ids []string)
 }
 
@@ -90,6 +90,10 @@ func (s *Service) oidcProviderCallbacks() (string, string, errors.Error) {
 	return s.cfg.AuthPublicURL + authOIDCCallbackPath, s.cfg.GrafanaPublicURL, nil
 }
 
+// OIDCProviderCallbacks intentionally returns the DevLake callback URL and
+// callback URLs for every supported Grafana target. This allows the new-provider
+// creation form in Config UI to display the exact callback URL needed for IDP
+// configuration as soon as the administrator selects a target.
 func (s *Service) OIDCProviderCallbacks() (*OIDCProviderCallbacksResponse, errors.Error) {
 	devLakeCallbackURL, grafanaPublicURL, err := s.oidcProviderCallbacks()
 	if err != nil {

@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apache/incubator-devlake/core/dal"
+	"github.com/apache/incubator-devlake/core/errors"
 	mockdal "github.com/apache/incubator-devlake/mocks/core/dal"
 	"github.com/stretchr/testify/mock"
 )
@@ -106,5 +108,83 @@ func TestAuthorizeExistingUserRejectsDisabledOrHiddenUser(t *testing.T) {
 	hiddenUser.ID = 11
 	if _, err := service.authorizeExistingUser(hiddenUser, &AccessIdentity{}, identity); err == nil {
 		t.Fatal("expected hidden user to be rejected")
+	}
+}
+
+type fakeSessionRevoker struct {
+	calledWithKeys    []string
+	calledWithSubject string
+	cachedIDs         []string
+}
+
+func (f *fakeSessionRevoker) RevokePersistentSessions(tx dal.Transaction, providerKeys []string, subject string) ([]string, errors.Error) {
+	f.calledWithKeys = append(f.calledWithKeys, providerKeys...)
+	f.calledWithSubject = subject
+	return []string{"session-1", "session-2"}, nil
+}
+
+func (f *fakeSessionRevoker) CacheRevokedSessions(ids []string) {
+	f.cachedIDs = append(f.cachedIDs, ids...)
+}
+
+func TestUserDisablementRevokesAllIssuerProviderSessions(t *testing.T) {
+	db := &mockdal.Dal{}
+	tx := &mockdal.Transaction{}
+
+	db.On("Begin").Return(tx)
+	db.On("Create", mock.Anything).Return(nil)
+	tx.On("Rollback").Return(nil)
+	tx.On("Commit").Return(nil)
+
+	user := &AccessUser{Role: RoleMember, Status: StatusActive}
+	user.ID = 50
+	tx.On("First", mock.AnythingOfType("*access.AccessUser"), mock.Anything).Run(func(args mock.Arguments) {
+		arg := args.Get(0).(*AccessUser)
+		*arg = *user
+	}).Return(nil)
+	tx.On("Update", mock.AnythingOfType("*access.AccessUser")).Return(nil)
+
+	// User has one linked identity with issuer https://accounts.google.com
+	identities := []AccessIdentity{
+		{AccessUserID: 50, Issuer: "https://accounts.google.com", Subject: "google-sub-999"},
+	}
+	tx.On("All", mock.AnythingOfType("*[]access.AccessIdentity"), mock.Anything).Run(func(args mock.Arguments) {
+		arg := args.Get(0).(*[]AccessIdentity)
+		*arg = identities
+	}).Return(nil)
+
+	// Database contains 2 provider keys for that issuer (e.g. current "google" and retired "google-old")
+	providersForIssuer := []OIDCProvider{
+		{ProviderKey: "google", IssuerURL: "https://accounts.google.com"},
+		{ProviderKey: "google-old", IssuerURL: "https://accounts.google.com"},
+	}
+	tx.On("All", mock.AnythingOfType("*[]access.OIDCProvider"), mock.Anything).Run(func(args mock.Arguments) {
+		arg := args.Get(0).(*[]OIDCProvider)
+		*arg = providersForIssuer
+	}).Return(nil)
+
+	revoker := &fakeSessionRevoker{}
+	service := &Service{
+		db:             db,
+		sessionRevoker: revoker,
+	}
+
+	updated, err := service.UpdateUser("admin@company.com", 50, RoleMember, StatusDisabled)
+	if err != nil {
+		t.Fatalf("UpdateUser() error = %v", err)
+	}
+	if updated.Status != StatusDisabled {
+		t.Fatalf("status = %s, want %s", updated.Status, StatusDisabled)
+	}
+
+	// Verify that RevokePersistentSessions was invoked with BOTH provider keys (active and retired)
+	if len(revoker.calledWithKeys) != 2 || revoker.calledWithKeys[0] != "google" || revoker.calledWithKeys[1] != "google-old" {
+		t.Fatalf("revoker called with keys = %#v, want [google, google-old]", revoker.calledWithKeys)
+	}
+	if revoker.calledWithSubject != "google-sub-999" {
+		t.Fatalf("revoker called with subject = %q, want google-sub-999", revoker.calledWithSubject)
+	}
+	if len(revoker.cachedIDs) != 2 || revoker.cachedIDs[0] != "session-1" || revoker.cachedIDs[1] != "session-2" {
+		t.Fatalf("cachedIDs = %#v, want [session-1, session-2]", revoker.cachedIDs)
 	}
 }

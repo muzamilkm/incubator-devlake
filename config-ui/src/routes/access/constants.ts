@@ -55,6 +55,8 @@ export const OIDC_PROVIDER_MESSAGE = {
   CALLBACK_DESCRIPTION: 'Register this exact callback URL with the customer OIDC provider.',
   SECRET_REPLACEMENT_REQUIRED: 'Required only when changing the client ID or rotating the secret.',
   VALIDATED: 'OIDC provider settings are valid.',
+  GRAFANA_SYNC_FAILED:
+    'OIDC provider was saved, but Grafana OAuth synchronization failed. Use Retry Grafana to complete synchronization.',
   RECOVERY_REQUIRED:
     'Grafana OAuth was disabled because the new configuration could not be safely rolled back. Retry synchronization after resolving the deployment issue.',
   ACTIVATION_COMPENSATED:

@@ -66,7 +66,7 @@ func safeAccessError(status int, code string) bool {
 	if status >= http.StatusBadRequest && status < http.StatusInternalServerError {
 		return true
 	}
-	return status == http.StatusServiceUnavailable && code == ErrCodeProviderBlocked
+	return status == http.StatusServiceUnavailable && (code == ErrCodeProviderBlocked || code == ErrCodeGrafanaSyncFailed)
 }
 
 func GetCurrent(c *gin.Context) {
@@ -85,21 +85,37 @@ func GetCurrent(c *gin.Context) {
 
 func GetGrafanaLogin(c *gin.Context) {
 	service := Default()
+	wantsJSON := strings.Contains(c.GetHeader("Accept"), "application/json")
+	fallbackURL := "/grafana/"
+	if service != nil && service.cfg.GrafanaPublicURL != "" {
+		fallbackURL = service.cfg.GrafanaPublicURL + "/login"
+	}
+	fallbackRedirect := func() {
+		if wantsJSON {
+			outputError(c, errors.Unauthorized.New("native OIDC authentication is required"))
+		} else {
+			c.Redirect(http.StatusFound, fallbackURL)
+		}
+	}
 	if service == nil || !service.Enabled() {
-		outputError(c, errors.Unauthorized.New("native OIDC authentication is required"))
+		fallbackRedirect()
 		return
 	}
 	identity, ok := GetIdentity(c)
 	if !ok {
-		outputError(c, errors.Unauthorized.New("native OIDC authentication is required"))
+		fallbackRedirect()
 		return
 	}
 	response, err := service.GrafanaLoginURL(identity)
 	if err != nil {
-		outputError(c, err)
+		fallbackRedirect()
 		return
 	}
-	shared.ApiOutputSuccess(c, response, http.StatusOK)
+	if wantsJSON {
+		shared.ApiOutputSuccess(c, response, http.StatusOK)
+		return
+	}
+	c.Redirect(http.StatusFound, response.URL)
 }
 
 func ListLinkableOIDCProviders(c *gin.Context) {
@@ -279,16 +295,29 @@ func HideUser(c *gin.Context) {
 	shared.ApiOutputSuccess(c, user, http.StatusOK)
 }
 
-func GetOIDCProvider(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
-		return
-	}
-	provider, err := Default().GetOIDCProvider()
-	if err != nil {
-		outputError(c, err)
-		return
-	}
-	shared.ApiOutputSuccess(c, Default().decorateOIDCProviderResponse(provider), http.StatusOK)
+func RegisterRoutes(r *gin.Engine) {
+	r.GET("/access/me", GetCurrent)
+	r.GET("/access/grafana-login", GetGrafanaLogin)
+	r.GET("/access/oidc-providers/linkable", ListLinkableOIDCProviders)
+	r.GET("/access/users", ListUsers)
+	r.POST("/access/users", PostUser)
+	r.PATCH("/access/users/:id", PatchUser)
+	r.POST("/access/users/:id/hide", HideUser)
+	r.GET("/access/domains", ListDomains)
+	r.POST("/access/domains", PostDomain)
+	r.PATCH("/access/domains/:id", PatchDomain)
+	r.POST("/access/domains/:id/hide", HideDomain)
+	r.GET("/access/audit-events", ListAuditEvents)
+	r.GET("/access/oidc-providers/callbacks", GetOIDCProviderCallbacks)
+	r.GET("/access/oidc-providers", ListOIDCProviders)
+	r.POST("/access/oidc-providers/validate", ValidateOIDCProvider)
+	r.POST("/access/oidc-providers", SaveOIDCProvider)
+	r.POST("/access/oidc-providers/:providerKey/activate", ActivateOIDCProviderByKey)
+	r.POST("/access/oidc-providers/:providerKey/enable", EnableOIDCProviderByKey)
+	r.POST("/access/oidc-providers/:providerKey/disable", DisableOIDCProviderByKey)
+	r.DELETE("/access/oidc-providers/:providerKey", RetireOIDCProviderByKey)
+	r.POST("/access/oidc-providers/:providerKey/grafana/retry", RetryGrafanaOIDCProviderSyncByKey)
+	r.POST("/access/oidc-providers/:providerKey/grafana/select-generic", SelectGenericOIDCProvider)
 }
 
 func ListOIDCProviders(c *gin.Context) {
@@ -333,7 +362,7 @@ func ValidateOIDCProvider(c *gin.Context) {
 	shared.ApiOutputSuccess(c, nil, http.StatusNoContent)
 }
 
-func PutOIDCProvider(c *gin.Context) {
+func SaveOIDCProvider(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
 		return
 	}
@@ -343,91 +372,6 @@ func PutOIDCProvider(c *gin.Context) {
 	}
 	actor, _ := GetIdentity(c)
 	provider, err := Default().SaveOIDCProvider(c.Request.Context(), actor.Email, input)
-	if err != nil {
-		outputError(c, err)
-		return
-	}
-	shared.ApiOutputSuccess(c, Default().decorateOIDCProviderResponse(provider), http.StatusOK)
-}
-
-func ActivateOIDCProvider(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
-		return
-	}
-	actor, _ := GetIdentity(c)
-	providerKey, ok := singletonProviderKey(c)
-	if !ok {
-		return
-	}
-	provider, err := Default().ActivateOIDCProvider(c.Request.Context(), actor.Email, providerKey)
-	if err != nil {
-		outputError(c, err)
-		return
-	}
-	shared.ApiOutputSuccess(c, Default().decorateOIDCProviderResponse(provider), http.StatusOK)
-}
-
-func EnableOIDCProvider(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
-		return
-	}
-	actor, _ := GetIdentity(c)
-	providerKey, ok := singletonProviderKey(c)
-	if !ok {
-		return
-	}
-	provider, err := Default().EnableOIDCProvider(c.Request.Context(), actor.Email, providerKey)
-	if err != nil {
-		outputError(c, err)
-		return
-	}
-	shared.ApiOutputSuccess(c, Default().decorateOIDCProviderResponse(provider), http.StatusOK)
-}
-
-func DisableOIDCProvider(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
-		return
-	}
-	actor, _ := GetIdentity(c)
-	providerKey, ok := singletonProviderKey(c)
-	if !ok {
-		return
-	}
-	provider, err := Default().DisableOIDCProvider(c.Request.Context(), actor.Email, providerKey)
-	if err != nil {
-		outputError(c, err)
-		return
-	}
-	shared.ApiOutputSuccess(c, Default().decorateOIDCProviderResponse(provider), http.StatusOK)
-}
-
-func RetireOIDCProvider(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
-		return
-	}
-	actor, _ := GetIdentity(c)
-	providerKey, ok := singletonProviderKey(c)
-	if !ok {
-		return
-	}
-	provider, err := Default().RetireOIDCProvider(c.Request.Context(), actor.Email, providerKey)
-	if err != nil {
-		outputError(c, err)
-		return
-	}
-	shared.ApiOutputSuccess(c, Default().decorateOIDCProviderResponse(provider), http.StatusOK)
-}
-
-func RetryGrafanaOIDCProviderSync(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
-		return
-	}
-	actor, _ := GetIdentity(c)
-	providerKey, ok := singletonProviderKey(c)
-	if !ok {
-		return
-	}
-	provider, err := Default().RetryGrafanaOIDCProviderSync(c.Request.Context(), actor.Email, providerKey)
 	if err != nil {
 		outputError(c, err)
 		return
@@ -476,15 +420,6 @@ func runOIDCProviderAction(c *gin.Context, action oidcProviderAction) {
 		return
 	}
 	shared.ApiOutputSuccess(c, Default().decorateOIDCProviderResponse(provider), http.StatusOK)
-}
-
-func singletonProviderKey(c *gin.Context) (string, bool) {
-	providerKey, err := Default().singleOIDCProviderKey()
-	if err != nil {
-		outputError(c, err)
-		return "", false
-	}
-	return providerKey, true
 }
 
 func pathProviderKey(c *gin.Context) (string, bool) {

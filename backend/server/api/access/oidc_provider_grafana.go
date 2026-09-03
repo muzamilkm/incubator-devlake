@@ -174,7 +174,12 @@ func (s *Service) persistGenericSelection(provider *OIDCProvider) errors.Error {
 			}
 		}
 	}()
-	if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{{ColumnName: "grafana_target", Value: GrafanaProviderNone}}, dal.Where("grafana_target = ? AND id <> ?", GrafanaProviderGenericOAuth, provider.ID)); err != nil {
+	if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{
+		{ColumnName: "grafana_target", Value: GrafanaProviderNone},
+		{ColumnName: "grafana_sync_status", Value: OIDCProviderStatusNotApplicable},
+		{ColumnName: "grafana_synced_revision", Value: uint64(0)},
+		{ColumnName: "grafana_last_error_code", Value: ""},
+	}, dal.Where("grafana_target = ? AND id <> ?", GrafanaProviderGenericOAuth, provider.ID)); err != nil {
 		return errors.Default.Wrap(err, "error clearing previous Grafana generic OAuth provider")
 	}
 	now := time.Now()
