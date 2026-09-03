@@ -108,7 +108,7 @@ export const getCreateDomainError = (error: unknown) => {
 export const normalizeOIDCProviderInput = (provider: OIDCProviderInput): OIDCProviderInput => ({
   providerKey: provider.providerKey.trim().toLowerCase(),
   displayName: provider.displayName.trim(),
-  issuerUrl: provider.issuerUrl.trim().replace(/\/+$/, ''),
+  issuerUrl: provider.issuerUrl.trim(),
   clientId: provider.clientId.trim(),
   clientSecret: provider.clientSecret.trim(),
   scopes: provider.scopes

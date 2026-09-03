@@ -27,7 +27,7 @@ import (
 
 func normalizeOIDCProviderInput(input OIDCProviderInput) (*OIDCProvider, string, errors.Error) {
 	providerKey := strings.ToLower(strings.TrimSpace(input.ProviderKey))
-	issuerURL := strings.TrimRight(strings.TrimSpace(input.IssuerURL), "/")
+	issuerURL := strings.TrimSpace(input.IssuerURL)
 	clientID := strings.TrimSpace(input.ClientID)
 	displayName := strings.TrimSpace(input.DisplayName)
 	scopes := normalizeOIDCScopes(input.Scopes)

@@ -124,7 +124,7 @@ test('normalizes and validates OIDC provider settings locally', () => {
   const provider = normalizeOIDCProviderInput({
     providerKey: ' Google-Workspace ',
     displayName: ' Google Workspace ',
-    issuerUrl: 'https://accounts.example.com///',
+    issuerUrl: ' https://accounts.example.com/ ',
     clientId: ' client-id ',
     clientSecret: ' secret ',
     scopes: 'openid, profile openid email',
@@ -133,7 +133,7 @@ test('normalizes and validates OIDC provider settings locally', () => {
   });
 
   equal(provider.providerKey, 'google-workspace');
-  equal(provider.issuerUrl, 'https://accounts.example.com');
+  equal(provider.issuerUrl, 'https://accounts.example.com/');
   equal(provider.scopes, 'openid profile email');
   equal(isValidOIDCProviderInput(provider), true);
   equal(isValidOIDCProviderInput({ ...provider, providerKey: 'invalid/key' }), false);
