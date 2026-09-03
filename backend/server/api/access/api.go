@@ -85,17 +85,12 @@ func GetCurrent(c *gin.Context) {
 
 func GetGrafanaLogin(c *gin.Context) {
 	service := Default()
-	wantsJSON := strings.Contains(c.GetHeader("Accept"), "application/json")
 	fallbackURL := "/grafana/"
 	if service != nil && service.cfg.GrafanaPublicURL != "" {
 		fallbackURL = service.cfg.GrafanaPublicURL + "/login"
 	}
 	fallbackRedirect := func() {
-		if wantsJSON {
-			outputError(c, errors.Unauthorized.New("native OIDC authentication is required"))
-		} else {
-			c.Redirect(http.StatusFound, fallbackURL)
-		}
+		c.Redirect(http.StatusFound, fallbackURL)
 	}
 	if service == nil || !service.Enabled() {
 		fallbackRedirect()
@@ -109,10 +104,6 @@ func GetGrafanaLogin(c *gin.Context) {
 	response, err := service.GrafanaLoginURL(identity)
 	if err != nil {
 		fallbackRedirect()
-		return
-	}
-	if wantsJSON {
-		shared.ApiOutputSuccess(c, response, http.StatusOK)
 		return
 	}
 	c.Redirect(http.StatusFound, response.URL)

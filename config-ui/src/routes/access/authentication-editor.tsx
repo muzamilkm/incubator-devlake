@@ -33,10 +33,7 @@ import {
 import { Block } from '@/components';
 import { operator } from '@/utils';
 
-import {
-  GRAFANA_PROVIDER_OPTIONS,
-  OIDC_PROVIDER_MESSAGE,
-} from './constants';
+import { GRAFANA_PROVIDER_OPTIONS, OIDC_PROVIDER_MESSAGE } from './constants';
 import {
   formFromOIDCProvider,
   getOIDCProviderError,
@@ -72,14 +69,7 @@ const Callback = ({ label, value }: { label: string; value: string }) => (
   </Block>
 );
 
-export const AuthenticationEditor = ({
-  open,
-  provider,
-  callbacks,
-  onClose,
-  onSaved,
-  onGrafanaSyncFailed,
-}: Props) => {
+export const AuthenticationEditor = ({ open, provider, callbacks, onClose, onSaved, onGrafanaSyncFailed }: Props) => {
   const [form, setForm] = useState<OIDCProviderInput>(() => formFromOIDCProvider(provider));
   const [validating, setValidating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -89,8 +79,7 @@ export const AuthenticationEditor = ({
   const isOperating = validating || saving;
   const normalizedInput = useMemo(() => normalizeOIDCProviderInput(form), [form]);
   const validInput = isValidOIDCProviderInput(form, provider);
-  const requiresReplacementSecret =
-    !provider?.secretConfigured || form.clientId.trim() !== provider.clientId;
+  const requiresReplacementSecret = !provider?.secretConfigured || form.clientId.trim() !== provider.clientId;
 
   useEffect(() => {
     if (open) {
@@ -157,12 +146,7 @@ export const AuthenticationEditor = ({
           <Button loading={validating} disabled={!validInput || isOperating} onClick={handleValidate}>
             Validate
           </Button>
-          <Button
-            type="primary"
-            loading={saving}
-            disabled={!validInput || isOperating}
-            onClick={handleSave}
-          >
+          <Button type="primary" loading={saving} disabled={!validInput || isOperating} onClick={handleSave}>
             Save provider
           </Button>
         </Space>
@@ -216,9 +200,7 @@ export const AuthenticationEditor = ({
         </Block>
         <Block
           title="Client secret"
-          description={
-            provider?.secretConfigured ? OIDC_PROVIDER_MESSAGE.SECRET_REPLACEMENT_REQUIRED : undefined
-          }
+          description={provider?.secretConfigured ? OIDC_PROVIDER_MESSAGE.SECRET_REPLACEMENT_REQUIRED : undefined}
           required={requiresReplacementSecret}
         >
           <Input.Password

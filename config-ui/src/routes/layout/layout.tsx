@@ -102,7 +102,6 @@ export const Layout = () => {
     setSelectedKeys(selectedKeys);
   }, [pathname]);
 
-
   const title = useMemo(() => {
     const curMenuItem = menuItemsMatch[pathname];
     return curMenuItem?.label ?? '';

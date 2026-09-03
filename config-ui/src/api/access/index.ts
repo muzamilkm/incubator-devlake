@@ -142,10 +142,6 @@ export type OIDCCallbacks = {
 
 export type LinkableOIDCProvider = Pick<OIDCProvider, 'providerKey' | 'displayName'>;
 
-export type GrafanaLogin = {
-  url: string;
-};
-
 export type AccessPagination = {
   page: number;
   pageSize: 10 | 25 | 50;
@@ -189,9 +185,9 @@ export const listOIDCProviders = (): Promise<OIDCProvider[]> => request(`${baseP
 export const listLinkableOIDCProviders = (): Promise<LinkableOIDCProvider[]> =>
   request(`${basePath}/oidc-providers/linkable`);
 export const validateOIDCProvider = (data: OIDCProviderInput): Promise<void> =>
-  request(`${basePath}/oidc-provider/validate`, { method: 'POST', data });
+  request(`${basePath}/oidc-providers/validate`, { method: 'POST', data });
 export const saveOIDCProvider = (data: OIDCProviderInput): Promise<OIDCProvider> =>
-  request(`${basePath}/oidc-provider`, { method: 'PUT', data });
+  request(`${basePath}/oidc-providers`, { method: 'POST', data });
 export const activateOIDCProvider = (providerKey: string): Promise<OIDCProvider> =>
   request(`${basePath}/oidc-providers/${encodeURIComponent(providerKey)}/activate`, { method: 'POST' });
 export const enableOIDCProvider = (providerKey: string): Promise<OIDCProvider> =>
@@ -204,4 +200,3 @@ export const retryGrafanaOIDCProviderSync = (providerKey: string): Promise<OIDCP
   request(`${basePath}/oidc-providers/${encodeURIComponent(providerKey)}/grafana/retry`, { method: 'POST' });
 export const selectGenericOIDCProvider = (providerKey: string): Promise<OIDCProvider> =>
   request(`${basePath}/oidc-providers/${encodeURIComponent(providerKey)}/grafana/select-generic`, { method: 'POST' });
-export const getGrafanaLogin = (): Promise<GrafanaLogin> => request(`${basePath}/grafana-login`);

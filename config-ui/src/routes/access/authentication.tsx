@@ -28,11 +28,7 @@ import { operator } from '@/utils';
 import { OIDC_PROVIDER_MESSAGE } from './constants';
 import { SectionHeader, SectionTitle } from './styled';
 import { getAuthenticationState, getOIDCProviderError } from './utils';
-import {
-  type ActiveOperation,
-  type Operation,
-  getAuthenticationColumns,
-} from './authentication-columns';
+import { type ActiveOperation, type Operation, getAuthenticationColumns } from './authentication-columns';
 import { AuthenticationEditor } from './authentication-editor';
 
 type Props = {
