@@ -90,6 +90,8 @@ export const Authentication = ({ callbacks, providers, loadFailed, onRefresh }: 
     onRefresh();
   };
 
+  const enabledProviderCount = useMemo(() => providers.filter((p) => p.enabled).length, [providers]);
+
   const columns = useMemo(
     () =>
       getAuthenticationColumns({
@@ -97,8 +99,9 @@ export const Authentication = ({ callbacks, providers, loadFailed, onRefresh }: 
         onAction: performAction,
         isOperating,
         isActionOperating,
+        enabledProviderCount,
       }),
-    [isOperating, operating],
+    [isOperating, operating, enabledProviderCount],
   );
 
   if (loadFailed) {

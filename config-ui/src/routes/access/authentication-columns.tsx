@@ -16,7 +16,7 @@
  *
  */
 
-import { Button, Popconfirm, Space, Tag } from 'antd';
+import { Button, Popconfirm, Space, Tag, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import { GRAFANA_PROVIDER_KIND, OIDC_PROVIDER_SYNC_STATUS, type OIDCProvider } from '@/api/access';
@@ -43,6 +43,7 @@ type GetAuthenticationColumnsProps = {
   onAction: (action: Exclude<Operation, 'validate' | 'save'>, provider: OIDCProvider) => void;
   isOperating: boolean;
   isActionOperating: (action: Operation, providerKey?: string) => boolean;
+  enabledProviderCount?: number;
 };
 
 const providerActionMessage = (action: Operation, provider: OIDCProvider) => {
@@ -63,6 +64,7 @@ export const getAuthenticationColumns = ({
   onAction,
   isOperating,
   isActionOperating,
+  enabledProviderCount,
 }: GetAuthenticationColumnsProps): ColumnsType<OIDCProvider> => [
   {
     title: 'Provider',
@@ -123,16 +125,26 @@ export const getAuthenticationColumns = ({
           </Popconfirm>
         )}
         {provider.enabled && !provider.hasCandidate && (
-          <Popconfirm
-            title="Disable OIDC provider?"
-            description={providerActionMessage('disable', provider)}
-            okText="Disable"
-            onConfirm={() => onAction('disable', provider)}
-          >
-            <Button size="small" loading={isActionOperating('disable', provider.providerKey)} disabled={isOperating}>
-              Disable
-            </Button>
-          </Popconfirm>
+          enabledProviderCount !== undefined && enabledProviderCount <= 1 ? (
+            <Tooltip title="At least one OIDC provider must remain enabled.">
+              <span>
+                <Button size="small" disabled>
+                  Disable
+                </Button>
+              </span>
+            </Tooltip>
+          ) : (
+            <Popconfirm
+              title="Disable OIDC provider?"
+              description={providerActionMessage('disable', provider)}
+              okText="Disable"
+              onConfirm={() => onAction('disable', provider)}
+            >
+              <Button size="small" loading={isActionOperating('disable', provider.providerKey)} disabled={isOperating}>
+                Disable
+              </Button>
+            </Popconfirm>
+          )
         )}
         {!provider.enabled && !provider.hasCandidate && (
           <Button
