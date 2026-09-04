@@ -49,3 +49,12 @@ func TestSafeReturnURL(t *testing.T) {
 		})
 	}
 }
+
+func TestIdentityLinkReturnURL(t *testing.T) {
+	if got := identityLinkReturnURL("/access?tab=authentication", "linked"); got != "/access?identity_link=linked&tab=authentication" {
+		t.Fatalf("identityLinkReturnURL() = %q", got)
+	}
+	if got := identityLinkReturnURL("https://untrusted.example.com", "failed"); got != "/?identity_link=failed" {
+		t.Fatalf("identityLinkReturnURL() unsafe URL = %q", got)
+	}
+}

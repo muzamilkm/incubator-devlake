@@ -97,11 +97,15 @@ const getMenuMatchs = (items: MenuItem[], parentKey?: string) => {
 
 export const menuItemsMatch = getMenuMatchs(menuItems);
 
-export const headerItems = [
+type HeaderItem = {
+  link: string;
+  label: string;
+  icon: React.ReactNode;
+};
+
+export const headerItems: HeaderItem[] = [
   {
-    // The deployment edge resolves this stable route to Grafana's public OAuth
-    // entry point. It preserves local accounts for people who visit Grafana directly.
-    link: '/grafana/login/generic_oauth',
+    link: '/api/access/grafana-login',
     label: 'Dashboards',
     icon: <DashboardOutlined />,
   },

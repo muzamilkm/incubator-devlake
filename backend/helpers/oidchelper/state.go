@@ -34,11 +34,12 @@ import (
 // browser is the one that initiated the flow. Provider names which IdP
 // minted this flow so the callback handler picks the right token endpoint.
 type StatePayload struct {
-	Provider     string    `json:"v"`
-	Nonce        string    `json:"n"`
-	ReturnURL    string    `json:"r"`
-	PKCEVerifier string    `json:"p"`
-	IssuedAt     time.Time `json:"t"`
+	Provider            string    `json:"v"`
+	Nonce               string    `json:"n"`
+	ReturnURL           string    `json:"r"`
+	PKCEVerifier        string    `json:"p"`
+	IdentityLinkStateID string    `json:"l,omitempty"`
+	IssuedAt            time.Time `json:"t"`
 }
 
 // EncodeState seals a StatePayload with AES-GCM (key derived from

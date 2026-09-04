@@ -18,17 +18,20 @@ limitations under the License.
 package access
 
 import (
+	"context"
+	"net/http"
 	"testing"
 
 	"github.com/apache/incubator-devlake/core/dal"
 	dalmocks "github.com/apache/incubator-devlake/mocks/core/dal"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestRecordGrafanaCompensatedPersistsDistinctRecoveryState(t *testing.T) {
 	db := dalmocks.NewDal(t)
-	configuration := &OIDCProviderConfiguration{ProviderRevision: 3, GrafanaSyncedRevision: 2}
-	db.EXPECT().Update(configuration).Run(func(actual interface{}, _ ...dal.Clause) {
-		persisted := actual.(*OIDCProviderConfiguration)
+	provider := &OIDCProvider{Revision: 3, GrafanaSyncedRevision: 2}
+	db.EXPECT().Update(provider).Run(func(actual interface{}, _ ...dal.Clause) {
+		persisted := actual.(*OIDCProvider)
 		if persisted.GrafanaSyncStatus != OIDCProviderStatusCompensated {
 			t.Fatalf("Grafana sync status = %q, want %q", persisted.GrafanaSyncStatus, OIDCProviderStatusCompensated)
 		}
@@ -40,7 +43,65 @@ func TestRecordGrafanaCompensatedPersistsDistinctRecoveryState(t *testing.T) {
 		}
 	}).Return(nil)
 
-	if err := (&Service{db: db}).recordGrafanaCompensated(configuration, 2); err != nil {
+	if err := (&Service{db: db}).recordGrafanaCompensated(provider, 2); err != nil {
 		t.Fatalf("recordGrafanaCompensated() error = %v", err)
+	}
+}
+
+func TestRetryGrafanaOIDCProviderSyncRejectsStagedCandidate(t *testing.T) {
+	db := dalmocks.NewDal(t)
+
+	provider := &OIDCProvider{
+		ProviderKey:   "google",
+		Revision:      2,
+		GrafanaTarget: GrafanaProviderGenericOAuth,
+		Enabled:       true,
+	}
+	provider.ID = 10
+
+	candidate := &OIDCProviderCandidate{
+		ProviderID:  10,
+		ProviderKey: "google",
+		Revision:    3,
+	}
+
+	db.EXPECT().First(mock.AnythingOfType("*access.OIDCProvider"), mock.Anything).Run(func(dest interface{}, clauses ...dal.Clause) {
+		p := dest.(*OIDCProvider)
+		*p = *provider
+	}).Return(nil).Once()
+
+	db.EXPECT().All(mock.AnythingOfType("*[]access.OIDCProviderCandidate"), mock.Anything).Run(func(dest interface{}, clauses ...dal.Clause) {
+		c := dest.(*[]OIDCProviderCandidate)
+		*c = []OIDCProviderCandidate{*candidate}
+	}).Return(nil).Once()
+
+	var putCalls int
+	grafanaClient, err := NewGrafanaSSOClient("http://grafana.internal", "admin", "admin", &http.Client{
+		Transport: grafanaRoundTripper(func(req *http.Request) (*http.Response, error) {
+			putCalls++
+			return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody, Header: make(http.Header)}, nil
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	service := &Service{
+		db:         db,
+		grafanaSSO: grafanaClient,
+	}
+
+	resp, retryErr := service.RetryGrafanaOIDCProviderSync(context.Background(), "admin@example.com", "google")
+	if retryErr == nil {
+		t.Fatal("expected error when retrying sync with staged candidate")
+	}
+	if resp != nil {
+		t.Fatal("expected nil response on error")
+	}
+	if retryErr.GetData() != ErrCodeProviderBlocked {
+		t.Fatalf("error data = %v, want %s", retryErr.GetData(), ErrCodeProviderBlocked)
+	}
+	if putCalls != 0 {
+		t.Fatalf("PutProvider called %d times, want 0", putCalls)
 	}
 }
