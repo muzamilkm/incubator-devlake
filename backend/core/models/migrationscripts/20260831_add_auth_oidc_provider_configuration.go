@@ -48,10 +48,10 @@ func (authOIDCProviderConfiguration20260831) TableName() string {
 
 type authOIDCProvider20260831 struct {
 	archived.Model
-	ProviderKey           string     `gorm:"type:varchar(64);uniqueIndex:idx_auth_oidc_provider_key"`
-	DisplayName           string     `gorm:"type:varchar(255)"`
-	IssuerURL             string     `gorm:"type:varchar(512);index:idx_auth_oidc_provider_issuer"`
-	ClientID              string     `gorm:"type:varchar(512)"`
+	ProviderKey           string `gorm:"type:varchar(64);uniqueIndex:idx_auth_oidc_provider_key"`
+	DisplayName           string `gorm:"type:varchar(255)"`
+	IssuerURL             string `gorm:"type:varchar(512);index:idx_auth_oidc_provider_issuer"`
+	ClientID              string `gorm:"type:varchar(512)"`
 	EncryptedClientSecret []byte
 	ClientSecretNonce     []byte
 	ClientSecretKeyID     string     `gorm:"type:varchar(64)"`
