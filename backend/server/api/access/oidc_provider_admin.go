@@ -112,9 +112,6 @@ func (s *Service) SaveOIDCProvider(ctx context.Context, actor string, input OIDC
 	if conflictErr := s.validateGrafanaTargetAssignment(provider, current); conflictErr != nil {
 		return nil, conflictErr
 	}
-	if provider.GrafanaTarget != GrafanaProviderNone && s.grafanaSSO == nil {
-		return nil, errors.Unavailable.New("Grafana SSO administration is not configured", errors.WithData(ErrCodeProviderBlocked))
-	}
 	prepared, prepareErr := s.oidcRuntime.PrepareOIDCProvider(ctx, provider, secret)
 	if prepareErr != nil {
 		return nil, prepareErr
@@ -122,16 +119,6 @@ func (s *Service) SaveOIDCProvider(ctx context.Context, actor string, input OIDC
 	persisted, saveErr := s.persistOIDCCandidate(provider, prepared, current)
 	if saveErr != nil {
 		return nil, saveErr
-	}
-	// An enabled provider continues serving Grafana until its candidate is
-	// explicitly activated. Pushing a disabled candidate into the same Grafana
-	// SSO slot here would turn off the live login path during an edit.
-	if persisted.GrafanaTarget != GrafanaProviderNone && (current == nil || !current.Enabled) {
-		if syncErr := s.syncGrafana(ctx, persisted, prepared.GrafanaSettings, false); syncErr != nil {
-			s.audit(actor, auditProviderGrafanaSyncFailed, nil, providerAuditDetail(persisted.ProviderKey))
-			return s.providerResponse(persisted), errors.Unavailable.Wrap(syncErr, "OIDC provider saved, but Grafana OAuth synchronization failed", errors.WithData(ErrCodeGrafanaSyncFailed))
-		}
-		s.audit(actor, auditProviderGrafanaSyncSucceeded, nil, providerAuditDetail(persisted.ProviderKey))
 	}
 	action := auditProviderCreated
 	if current != nil {

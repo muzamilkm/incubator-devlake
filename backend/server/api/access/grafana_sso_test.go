@@ -20,7 +20,6 @@ package access
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -43,7 +42,7 @@ func TestGrafanaSSOClientUsesDocumentedSettingsEndpoint(t *testing.T) {
 				if !ok || username != "devlake-system" || password != "machine-password" {
 					t.Fatal("missing Grafana management credentials")
 				}
-				return &http.Response{StatusCode: http.StatusNoContent, Body: io.NopCloser(nil), Header: make(http.Header)}, nil
+				return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody, Header: make(http.Header)}, nil
 			})})
 			if err != nil {
 				t.Fatal(err)
@@ -57,7 +56,7 @@ func TestGrafanaSSOClientUsesDocumentedSettingsEndpoint(t *testing.T) {
 
 func TestGrafanaSSOClientRedactsUpstreamResponse(t *testing.T) {
 	client, err := NewGrafanaSSOClient("http://grafana.internal", "devlake-system", "machine-password", &http.Client{Transport: grafanaRoundTripper(func(request *http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: http.StatusBadRequest, Body: io.NopCloser(nil), Header: make(http.Header)}, nil
+		return &http.Response{StatusCode: http.StatusBadRequest, Body: http.NoBody, Header: make(http.Header)}, nil
 	})})
 	if err != nil {
 		t.Fatal(err)

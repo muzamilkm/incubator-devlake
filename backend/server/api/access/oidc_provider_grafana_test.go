@@ -26,9 +26,9 @@ import (
 
 func TestRecordGrafanaCompensatedPersistsDistinctRecoveryState(t *testing.T) {
 	db := dalmocks.NewDal(t)
-	configuration := &OIDCProviderConfiguration{ProviderRevision: 3, GrafanaSyncedRevision: 2}
-	db.EXPECT().Update(configuration).Run(func(actual interface{}, _ ...dal.Clause) {
-		persisted := actual.(*OIDCProviderConfiguration)
+	provider := &OIDCProvider{Revision: 3, GrafanaSyncedRevision: 2}
+	db.EXPECT().Update(provider).Run(func(actual interface{}, _ ...dal.Clause) {
+		persisted := actual.(*OIDCProvider)
 		if persisted.GrafanaSyncStatus != OIDCProviderStatusCompensated {
 			t.Fatalf("Grafana sync status = %q, want %q", persisted.GrafanaSyncStatus, OIDCProviderStatusCompensated)
 		}
@@ -40,7 +40,7 @@ func TestRecordGrafanaCompensatedPersistsDistinctRecoveryState(t *testing.T) {
 		}
 	}).Return(nil)
 
-	if err := (&Service{db: db}).recordGrafanaCompensated(configuration, 2); err != nil {
+	if err := (&Service{db: db}).recordGrafanaCompensated(provider, 2); err != nil {
 		t.Fatalf("recordGrafanaCompensated() error = %v", err)
 	}
 }

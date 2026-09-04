@@ -183,6 +183,9 @@ func TestOIDCProviderResponseIncludesDeploymentDerivedCallbacks(t *testing.T) {
 	if response.GrafanaCallbackURL != "https://grafana.example.com/login/generic_oauth" {
 		t.Fatalf("Grafana callback = %q", response.GrafanaCallbackURL)
 	}
+	if response.AllowLocalOIDC {
+		t.Fatal("public deployment must not allow local OIDC HTTP")
+	}
 	response = service.decorateOIDCProviderResponse(&OIDCProviderResponse{GrafanaTarget: GrafanaProviderGoogle})
 	if response.GrafanaCallbackURL != "https://grafana.example.com/login/google" {
 		t.Fatalf("Google Grafana callback = %q", response.GrafanaCallbackURL)
@@ -201,6 +204,9 @@ func TestOIDCProviderCallbacksIncludeEachGrafanaSignInOption(t *testing.T) {
 	if callbacks.DevLakeCallbackURL != "https://devlake.example.com/api/auth/callback" {
 		t.Fatalf("DevLake callback = %q", callbacks.DevLakeCallbackURL)
 	}
+	if callbacks.AllowLocalOIDC {
+		t.Fatal("public deployment must not allow local OIDC HTTP")
+	}
 	for target, want := range map[GrafanaProviderKind]string{
 		GrafanaProviderNone:         "/login",
 		GrafanaProviderGoogle:       "/login/google",
@@ -212,6 +218,24 @@ func TestOIDCProviderCallbacksIncludeEachGrafanaSignInOption(t *testing.T) {
 		if got := callbacks.GrafanaCallbackURLs[target]; got != "https://grafana.example.com"+want {
 			t.Errorf("Grafana callback for %q = %q, want %q", target, got, "https://grafana.example.com"+want)
 		}
+	}
+}
+
+func TestOIDCProviderCallbacksExposeLocalDevelopmentCapability(t *testing.T) {
+	service := &Service{cfg: Config{
+		AuthPublicURL:    "http://localhost:4000",
+		GrafanaPublicURL: "http://localhost:3002",
+	}}
+	callbacks, err := service.OIDCProviderCallbacks()
+	if err != nil {
+		t.Fatalf("OIDCProviderCallbacks() error = %v", err)
+	}
+	if !callbacks.AllowLocalOIDC {
+		t.Fatal("local deployment must allow local OIDC HTTP")
+	}
+	response := service.decorateOIDCProviderResponse(&OIDCProviderResponse{})
+	if !response.AllowLocalOIDC {
+		t.Fatal("local provider response must allow local OIDC HTTP")
 	}
 }
 

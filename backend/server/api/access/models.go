@@ -60,6 +60,7 @@ const (
 	OIDCProviderStatusPending            = "pending"
 	OIDCProviderStatusSynchronized       = "synchronized"
 	OIDCProviderStatusFailed             = "failed"
+	OIDCProviderStatusCompensated        = "compensated"
 	OIDCProviderStatusCompensationFailed = "compensation_failed"
 	OIDCProviderStatusNotApplicable      = "not_applicable"
 
@@ -221,8 +222,8 @@ type OIDCProvider struct {
 	DisplayName           string              `gorm:"type:varchar(255)" json:"displayName"`
 	IssuerURL             string              `gorm:"type:varchar(512);index:idx_auth_oidc_provider_issuer" json:"issuerUrl"`
 	ClientID              string              `gorm:"type:varchar(512)" json:"clientId"`
-	EncryptedClientSecret []byte              `gorm:"type:blob" json:"-"`
-	ClientSecretNonce     []byte              `gorm:"type:blob" json:"-"`
+	EncryptedClientSecret []byte              `json:"-"`
+	ClientSecretNonce     []byte              `json:"-"`
 	ClientSecretKeyID     string              `gorm:"type:varchar(64)" json:"-"`
 	Scopes                string              `gorm:"type:text" json:"scopes"`
 	Enabled               bool                `gorm:"index:idx_auth_oidc_provider_enabled" json:"enabled"`
@@ -242,13 +243,13 @@ func (OIDCProvider) TableName() string { return "auth_oidc_providers" }
 // Grafana, and is retained after promotion for audit/recovery rather than hard-deleted.
 type OIDCProviderCandidate struct {
 	common.Model
-	ProviderID            uint64              `gorm:"index:idx_auth_oidc_provider_candidate_provider"`
-	ProviderKey           string              `gorm:"type:varchar(64);index:idx_auth_oidc_provider_candidate_key"`
-	DisplayName           string              `gorm:"type:varchar(255)"`
-	IssuerURL             string              `gorm:"type:varchar(512)"`
-	ClientID              string              `gorm:"type:varchar(512)"`
-	EncryptedClientSecret []byte              `gorm:"type:blob"`
-	ClientSecretNonce     []byte              `gorm:"type:blob"`
+	ProviderID            uint64 `gorm:"index:idx_auth_oidc_provider_candidate_provider"`
+	ProviderKey           string `gorm:"type:varchar(64);index:idx_auth_oidc_provider_candidate_key"`
+	DisplayName           string `gorm:"type:varchar(255)"`
+	IssuerURL             string `gorm:"type:varchar(512)"`
+	ClientID              string `gorm:"type:varchar(512)"`
+	EncryptedClientSecret []byte
+	ClientSecretNonce     []byte
 	ClientSecretKeyID     string              `gorm:"type:varchar(64)"`
 	Scopes                string              `gorm:"type:text"`
 	Revision              uint64              `gorm:"not null"`
@@ -355,6 +356,7 @@ type OIDCProviderResponse struct {
 	GrafanaTarget         GrafanaProviderKind `json:"grafanaTarget"`
 	DevLakeCallbackURL    string              `json:"devlakeCallbackUrl"`
 	GrafanaCallbackURL    string              `json:"grafanaCallbackUrl"`
+	AllowLocalOIDC        bool                `json:"allowLocalOidc"`
 }
 
 // OIDCProviderCallbacksResponse exposes deployment-derived redirect URIs before
@@ -362,6 +364,7 @@ type OIDCProviderResponse struct {
 type OIDCProviderCallbacksResponse struct {
 	DevLakeCallbackURL  string                         `json:"devlakeCallbackUrl"`
 	GrafanaCallbackURLs map[GrafanaProviderKind]string `json:"grafanaCallbackUrls"`
+	AllowLocalOIDC      bool                           `json:"allowLocalOidc"`
 }
 
 type GrafanaLoginResponse struct {

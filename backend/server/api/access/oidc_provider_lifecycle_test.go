@@ -60,7 +60,6 @@ func TestSetOIDCProviderEnabledDoesNotRevokeSessionsAfterStaleTransition(t *test
 		context.Background(),
 		"admin@example.com",
 		provider,
-		&OIDCProviderConfiguration{},
 		false,
 	)
 	if err == nil || err.GetData() != ErrCodeProviderBlocked {

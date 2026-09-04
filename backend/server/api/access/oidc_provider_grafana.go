@@ -152,6 +152,21 @@ func (s *Service) recordGrafanaSyncFailure(provider *OIDCProvider) {
 	}
 }
 
+// recordGrafanaCompensated records a successful restoration after an activation
+// transaction fails. It is distinct from a normal synchronized state because the
+// requested activation did not commit, but retrying it is safe after the restore.
+func (s *Service) recordGrafanaCompensated(provider *OIDCProvider, restoredRevision uint64) errors.Error {
+	now := time.Now()
+	provider.GrafanaSyncStatus = OIDCProviderStatusCompensated
+	provider.GrafanaSyncedRevision = restoredRevision
+	provider.GrafanaLastSyncedAt = &now
+	provider.GrafanaLastErrorCode = ErrCodeProviderBlocked
+	if err := s.db.Update(provider); err != nil {
+		return errors.Default.Wrap(err, "error recording restored Grafana OIDC configuration")
+	}
+	return nil
+}
+
 func (s *Service) recordGrafanaCompensationFailure(provider *OIDCProvider, cause errors.Error) {
 	provider.GrafanaSyncStatus = OIDCProviderStatusCompensationFailed
 	provider.GrafanaLastErrorCode = ErrCodeProviderBlocked

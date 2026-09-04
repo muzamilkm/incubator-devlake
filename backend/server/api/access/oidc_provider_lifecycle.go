@@ -62,6 +62,9 @@ func (s *Service) ActivateOIDCProvider(ctx context.Context, actor, providerKey s
 				s.recordGrafanaCompensationFailure(provider, compensationErr)
 				return nil, errors.Unavailable.New("OIDC provider activation requires operator recovery", errors.WithData(ErrCodeProviderBlocked))
 			}
+			if compensationErr := s.recordGrafanaCompensated(provider, provider.GrafanaSyncedRevision); compensationErr != nil {
+				return nil, compensationErr
+			}
 		}
 		return nil, activateErr
 	}
@@ -229,6 +232,9 @@ func (s *Service) setOIDCProviderEnabled(ctx context.Context, actor string, prov
 	}
 	var revokedIDs []string
 	err := s.withTransaction("OIDC provider enabled state", func(tx dal.Transaction) errors.Error {
+		if err := requireOIDCProviderState(tx, provider.ID, provider.Enabled); err != nil {
+			return err
+		}
 		if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{{ColumnName: "enabled", Value: enabled}}, dal.Where("id = ? AND retired_at IS NULL", provider.ID)); err != nil {
 			return errors.Default.Wrap(err, "error updating OIDC provider enabled state")
 		}
@@ -262,6 +268,9 @@ func (s *Service) setOIDCProviderRetired(ctx context.Context, actor string, prov
 	now := time.Now()
 	var revokedIDs []string
 	err := s.withTransaction("OIDC provider retirement", func(tx dal.Transaction) errors.Error {
+		if err := requireOIDCProviderState(tx, provider.ID, provider.Enabled); err != nil {
+			return err
+		}
 		if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{{ColumnName: "enabled", Value: false}, {ColumnName: "retired_at", Value: now}}, dal.Where("id = ? AND retired_at IS NULL", provider.ID)); err != nil {
 			return errors.Default.Wrap(err, "error retiring OIDC provider")
 		}
@@ -292,6 +301,24 @@ func (s *Service) ensureAnotherEnabledProvider(providerID uint64) errors.Error {
 	}
 	if count == 0 {
 		return errors.BadInput.New("at least one OIDC provider must remain enabled", errors.WithData(ErrCodeProviderBlocked))
+	}
+	return nil
+}
+
+// requireOIDCProviderState locks and verifies the state expected by a lifecycle
+// transition before session revocation. DAL updates do not report affected rows, so
+// this prevents a stale process from revoking sessions after another process changed
+// the provider first.
+func requireOIDCProviderState(tx dal.Transaction, providerID uint64, enabled bool) errors.Error {
+	provider := &OIDCProvider{}
+	if err := tx.First(provider,
+		dal.Where("id = ? AND enabled = ? AND retired_at IS NULL", providerID, enabled),
+		dal.Lock(true, false),
+	); err != nil {
+		if tx.IsErrorNotFound(err) {
+			return errors.BadInput.New("OIDC provider state changed; refresh and retry", errors.WithData(ErrCodeProviderBlocked))
+		}
+		return errors.Default.Wrap(err, "error verifying OIDC provider state")
 	}
 	return nil
 }

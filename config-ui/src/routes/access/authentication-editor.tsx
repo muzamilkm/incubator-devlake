@@ -78,7 +78,7 @@ export const AuthenticationEditor = ({ open, provider, callbacks, onClose, onSav
 
   const isOperating = validating || saving;
   const normalizedInput = useMemo(() => normalizeOIDCProviderInput(form), [form]);
-  const validInput = isValidOIDCProviderInput(form, provider);
+  const validInput = isValidOIDCProviderInput(form, provider, provider?.allowLocalOidc ?? callbacks?.allowLocalOidc);
   const requiresReplacementSecret = !provider?.secretConfigured || form.clientId.trim() !== provider.clientId;
 
   useEffect(() => {

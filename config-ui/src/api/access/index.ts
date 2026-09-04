@@ -138,6 +138,7 @@ export type OIDCProvider = Omit<OIDCProviderInput, 'clientSecret' | 'confirmDevl
 export type OIDCCallbacks = {
   devlakeCallbackUrl: string;
   grafanaCallbackUrls: Record<GrafanaProviderKind, string>;
+  allowLocalOidc: boolean;
 };
 
 export type LinkableOIDCProvider = Pick<OIDCProvider, 'providerKey' | 'displayName'>;
