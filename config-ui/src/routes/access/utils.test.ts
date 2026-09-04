@@ -218,14 +218,10 @@ test('maps OIDC provider errors to safe user-facing messages', () => {
   const unavailableUnknownProvider = createAxiosError(HttpStatusCode.ServiceUnavailable, {
     code: 'GRAFANA_CREDENTIAL_REJECTED',
   });
-  const grafanaSyncFailed = createAxiosError(HttpStatusCode.ServiceUnavailable, {
-    code: ACCESS_ERROR_CODE.GRAFANA_SYNC_FAILED,
-  });
 
   equal(getOIDCProviderError(invalidProvider), ACCESS_ERROR.INVALID_OIDC_PROVIDER);
   equal(getOIDCProviderError(blockedProvider), ACCESS_ERROR.OIDC_PROVIDER_BLOCKED);
   equal(getOIDCProviderError(unavailableBlockedProvider), ACCESS_ERROR.OIDC_PROVIDER_BLOCKED);
-  equal(getOIDCProviderError(grafanaSyncFailed), ACCESS_ERROR.GRAFANA_SYNC_FAILED);
   equal(getOIDCProviderError(unavailableUnknownProvider), ACCESS_ERROR.OIDC_PROVIDER_FAILED);
   equal(getOIDCProviderError(new Error('network error')), ACCESS_ERROR.OIDC_PROVIDER_FAILED);
 });
@@ -287,6 +283,7 @@ test('summarizes the authentication configuration state without inferring enviro
     grafanaTarget: GRAFANA_PROVIDER_KIND.GOOGLE,
     devlakeCallbackUrl: 'https://devlake.example.com/api/auth/callback',
     grafanaCallbackUrl: 'https://grafana.example.com/login/google',
+    allowLocalOidc: false,
   };
 
   equal(getAuthenticationState([]), AUTHENTICATION_STATE.NO_MANAGED_OIDC);
@@ -328,6 +325,7 @@ test('requires explicit DevLake-only confirmation and identifies a Generic OAuth
     hasCandidate: false,
     devlakeCallbackUrl: 'https://devlake.example.com/api/auth/callback',
     grafanaCallbackUrl: 'https://grafana.example.com/login',
+    allowLocalOidc: false,
   };
   equal(canSelectGenericOIDCProvider(provider), true);
   equal(canSelectGenericOIDCProvider({ ...provider, enabled: false }), false);

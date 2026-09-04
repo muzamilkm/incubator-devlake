@@ -162,11 +162,6 @@ export const Authentication = ({ callbacks, providers, loadFailed, onRefresh }: 
           setEditorOpen(false);
           onRefresh();
         }}
-        onGrafanaSyncFailed={(warningMsg) => {
-          setEditorOpen(false);
-          setPageWarning(warningMsg);
-          onRefresh();
-        }}
       />
     </>
   );

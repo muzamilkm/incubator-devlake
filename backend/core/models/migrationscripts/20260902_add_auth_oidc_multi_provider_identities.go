@@ -79,6 +79,7 @@ type authAccessUserIdentitySource20260902 struct {
 func (authAccessUserIdentitySource20260902) TableName() string { return "auth_access_users" }
 
 type authOIDCProviderMulti20260902 struct {
+	IssuerURL             string `gorm:"type:varchar(512);index:idx_auth_oidc_provider_issuer"`
 	Revision              uint64 `gorm:"not null;default:0"`
 	GrafanaTarget         string `gorm:"type:varchar(32);not null;default:'none';index:idx_auth_oidc_provider_grafana_target"`
 	GrafanaSyncStatus     string `gorm:"type:varchar(32);not null;default:'pending'"`
@@ -102,6 +103,7 @@ func (authOIDCProviderCandidateMulti20260902) TableName() string {
 type authOIDCProviderMigrationSource20260902 struct {
 	archived.Model
 	ProviderKey string
+	RetiredAt   *time.Time
 }
 
 func (authOIDCProviderMigrationSource20260902) TableName() string { return "auth_oidc_providers" }
@@ -118,6 +120,7 @@ func (authOIDCProviderCandidateMigrationSource20260902) TableName() string {
 
 type authOIDCProviderConfigurationMigrationSource20260902 struct {
 	ID                    string
+	ProviderRevision      uint64
 	GrafanaSyncStatus     string
 	GrafanaSyncedRevision uint64
 	GrafanaLastSyncedAt   *time.Time
@@ -131,6 +134,11 @@ func (authOIDCProviderConfigurationMigrationSource20260902) TableName() string {
 type addAuthOIDCMultiProviderIdentities struct{}
 
 func (*addAuthOIDCMultiProviderIdentities) Up(basicRes context.BasicRes) errors.Error {
+	db := basicRes.GetDal()
+	if db.HasTable((authOIDCProviderMulti20260902{}).TableName()) {
+		_ = db.DropIndexes((authOIDCProviderMulti20260902{}).TableName(), "idx_auth_oidc_provider_issuer")
+	}
+
 	if err := migrationhelper.AutoMigrateTables(
 		basicRes,
 		new(authAccessIdentity20260902),
@@ -142,10 +150,10 @@ func (*addAuthOIDCMultiProviderIdentities) Up(basicRes context.BasicRes) errors.
 		return err
 	}
 
-	if err := migrateAuthAccessIdentities20260902(basicRes.GetDal()); err != nil {
+	if err := migrateAuthAccessIdentities20260902(db); err != nil {
 		return err
 	}
-	return migrateOIDCProviderState20260902(basicRes.GetDal())
+	return migrateOIDCProviderState20260902(db)
 }
 
 func migrateAuthAccessIdentities20260902(db dal.Dal) errors.Error {
@@ -204,7 +212,11 @@ func migrateOIDCProviderState20260902(db dal.Dal) errors.Error {
 		}
 	}
 
-	if len(providers) != 1 || !db.HasTable((authOIDCProviderConfigurationMigrationSource20260902{}).TableName()) {
+	activeProviders := make([]authOIDCProviderMigrationSource20260902, 0)
+	if err := db.All(&activeProviders, dal.Where("retired_at IS NULL")); err != nil {
+		return err
+	}
+	if len(activeProviders) != 1 || !db.HasTable((authOIDCProviderConfigurationMigrationSource20260902{}).TableName()) {
 		return nil
 	}
 	configuration := &authOIDCProviderConfigurationMigrationSource20260902{}
@@ -214,8 +226,9 @@ func migrateOIDCProviderState20260902(db dal.Dal) errors.Error {
 		}
 		return err
 	}
-	provider := providers[0]
+	provider := activeProviders[0]
 	return db.UpdateColumns(&authOIDCProviderMulti20260902{}, []dal.DalSet{
+		{ColumnName: "revision", Value: configuration.ProviderRevision},
 		{ColumnName: "grafana_target", Value: "generic_oauth"},
 		{ColumnName: "grafana_sync_status", Value: configuration.GrafanaSyncStatus},
 		{ColumnName: "grafana_synced_revision", Value: configuration.GrafanaSyncedRevision},

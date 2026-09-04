@@ -54,7 +54,6 @@ const (
 	ErrCodeProviderRevisionConflict = "OIDC_PROVIDER_REVISION_CONFLICT"
 	ErrCodeGrafanaTargetConflict    = "GRAFANA_TARGET_CONFLICT"
 	ErrCodeIdentityLinked           = "OIDC_IDENTITY_LINKED"
-	ErrCodeGrafanaSyncFailed        = "GRAFANA_SYNC_FAILED"
 
 	OIDCProviderSourceKey                = "default"
 	OIDCProviderStatusPending            = "pending"

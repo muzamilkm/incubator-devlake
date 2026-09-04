@@ -66,7 +66,7 @@ func safeAccessError(status int, code string) bool {
 	if status >= http.StatusBadRequest && status < http.StatusInternalServerError {
 		return true
 	}
-	return status == http.StatusServiceUnavailable && (code == ErrCodeProviderBlocked || code == ErrCodeGrafanaSyncFailed)
+	return status == http.StatusServiceUnavailable && code == ErrCodeProviderBlocked
 }
 
 func GetCurrent(c *gin.Context) {

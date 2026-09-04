@@ -50,7 +50,7 @@ type authOIDCProvider20260831 struct {
 	archived.Model
 	ProviderKey           string `gorm:"type:varchar(64);uniqueIndex:idx_auth_oidc_provider_key"`
 	DisplayName           string `gorm:"type:varchar(255)"`
-	IssuerURL             string `gorm:"type:varchar(512);index:idx_auth_oidc_provider_issuer"`
+	IssuerURL             string `gorm:"type:varchar(512);uniqueIndex:idx_auth_oidc_provider_issuer"`
 	ClientID              string `gorm:"type:varchar(512)"`
 	EncryptedClientSecret []byte
 	ClientSecretNonce     []byte

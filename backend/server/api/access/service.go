@@ -80,6 +80,10 @@ func Init(basicRes context.BasicRes) {
 		)
 		if err == nil {
 			defaultService.grafanaSSO = grafanaClient
+		} else if defaultService.cfg.Enabled {
+			// The constructor error deliberately contains no supplied values. This
+			// warns operators without exposing backend-only Grafana credentials.
+			defaultService.logger.Warn(err, "access: Grafana SSO administration is unavailable; configure the private Grafana URL and management credentials")
 		}
 	})
 }

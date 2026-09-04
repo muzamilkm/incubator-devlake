@@ -23,7 +23,6 @@ import { CopyToClipboard } from 'react-copy-to-clipboard';
 
 import API from '@/api';
 import {
-  ACCESS_ERROR_CODE,
   GRAFANA_PROVIDER_KIND,
   OIDC_PROVIDER_SYNC_STATUS,
   type OIDCCallbacks,
@@ -37,7 +36,6 @@ import { GRAFANA_PROVIDER_OPTIONS, OIDC_PROVIDER_MESSAGE } from './constants';
 import {
   formFromOIDCProvider,
   getOIDCProviderError,
-  getOIDCProviderErrorCode,
   isValidOIDCProviderInput,
   normalizeOIDCProviderInput,
 } from './utils';
@@ -48,7 +46,6 @@ type Props = {
   callbacks?: OIDCCallbacks;
   onClose: () => void;
   onSaved: () => void;
-  onGrafanaSyncFailed: (message: string) => void;
 };
 
 const Callback = ({ label, value }: { label: string; value: string }) => (
@@ -69,7 +66,7 @@ const Callback = ({ label, value }: { label: string; value: string }) => (
   </Block>
 );
 
-export const AuthenticationEditor = ({ open, provider, callbacks, onClose, onSaved, onGrafanaSyncFailed }: Props) => {
+export const AuthenticationEditor = ({ open, provider, callbacks, onClose, onSaved }: Props) => {
   const [form, setForm] = useState<OIDCProviderInput>(() => formFromOIDCProvider(provider));
   const [validating, setValidating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -119,11 +116,6 @@ export const AuthenticationEditor = ({ open, provider, callbacks, onClose, onSav
       formatReason: getOIDCProviderError,
     });
     if (!success) {
-      const code = getOIDCProviderErrorCode(result);
-      if (code === ACCESS_ERROR_CODE.GRAFANA_SYNC_FAILED) {
-        onGrafanaSyncFailed(OIDC_PROVIDER_MESSAGE.GRAFANA_SYNC_FAILED);
-        return;
-      }
       setOperationError(getOIDCProviderError(result));
       return;
     }

@@ -39,8 +39,6 @@ export const ACCESS_ERROR = {
   OIDC_PROVIDER_FAILED: 'OIDC provider settings could not be completed. Please try again.',
   OIDC_PROVIDER_STALE: 'This provider changed. Refresh the page before saving it.',
   GRAFANA_TARGET_CONFLICT: 'Another provider already controls this Grafana sign-in option.',
-  GRAFANA_SYNC_FAILED:
-    'OIDC provider was saved, but Grafana OAuth synchronization failed. Use Retry Grafana to complete synchronization.',
 } as const;
 
 export const normalizeDomain = (value: string) => value.trim().toLowerCase();
@@ -168,7 +166,6 @@ export const getOIDCProviderError = (error: unknown) => {
   }
   if (code === ACCESS_ERROR_CODE.OIDC_PROVIDER_REVISION_CONFLICT) return ACCESS_ERROR.OIDC_PROVIDER_STALE;
   if (code === ACCESS_ERROR_CODE.GRAFANA_TARGET_CONFLICT) return ACCESS_ERROR.GRAFANA_TARGET_CONFLICT;
-  if (code === ACCESS_ERROR_CODE.GRAFANA_SYNC_FAILED) return ACCESS_ERROR.GRAFANA_SYNC_FAILED;
   return ACCESS_ERROR.OIDC_PROVIDER_FAILED;
 };
 
@@ -179,6 +176,8 @@ export const getOIDCProviderStatus = (provider?: OIDCProvider) => {
   if (provider.retiredAt) return OIDC_PROVIDER_STATUS.RETIRED;
   if (provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.COMPENSATION_FAILED)
     return OIDC_PROVIDER_STATUS.RECOVERY;
+  if (provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.COMPENSATED)
+    return OIDC_PROVIDER_STATUS.COMPENSATED;
   if (provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.FAILED) return OIDC_PROVIDER_STATUS.FAILED;
   if (!provider.enabled) return OIDC_PROVIDER_STATUS.DISABLED;
   if (provider.grafanaTarget === GRAFANA_PROVIDER_KIND.NONE) return OIDC_PROVIDER_STATUS.DEVLAKE_ONLY;

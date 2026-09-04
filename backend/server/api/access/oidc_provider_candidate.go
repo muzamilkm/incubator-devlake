@@ -45,6 +45,16 @@ func (s *Service) persistOIDCCandidate(provider *OIDCProvider, prepared *Prepare
 			if err := tx.Create(provider); err != nil {
 				return errors.Default.Wrap(err, "error creating OIDC provider")
 			}
+		} else if current.RetiredAt != nil {
+			provider.ID = current.ID
+			provider.CreatedAt = current.CreatedAt
+			provider.RetiredAt = nil
+			provider.Enabled = false
+			provider.Revision = current.Revision + 1
+			provider.UpdatedAt = now
+			if err := tx.Update(provider); err != nil {
+				return errors.Default.Wrap(err, "error updating retired OIDC provider")
+			}
 		} else if current.Enabled {
 			candidate := oidcCandidateFromProvider(provider, current.ID, current.Revision+1, now)
 			if err := tx.Create(candidate); err != nil {
@@ -53,8 +63,6 @@ func (s *Service) persistOIDCCandidate(provider *OIDCProvider, prepared *Prepare
 			if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{
 				{ColumnName: "revision", Value: candidate.Revision},
 				{ColumnName: "grafana_sync_status", Value: provider.GrafanaSyncStatus},
-				{ColumnName: "grafana_synced_revision", Value: uint64(0)},
-				{ColumnName: "grafana_last_synced_at", Value: nil},
 				{ColumnName: "grafana_last_error_code", Value: ""},
 			}, dal.Where("id = ?", current.ID)); err != nil {
 				return errors.Default.Wrap(err, "error recording OIDC provider candidate")
@@ -63,6 +71,8 @@ func (s *Service) persistOIDCCandidate(provider *OIDCProvider, prepared *Prepare
 			provider.CreatedAt = current.CreatedAt
 			provider.Enabled = current.Enabled
 			provider.Revision = candidate.Revision
+			provider.GrafanaSyncedRevision = current.GrafanaSyncedRevision
+			provider.GrafanaLastSyncedAt = current.GrafanaLastSyncedAt
 		} else {
 			provider.ID = current.ID
 			provider.CreatedAt = current.CreatedAt

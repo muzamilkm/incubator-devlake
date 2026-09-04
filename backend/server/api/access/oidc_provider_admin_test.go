@@ -18,7 +18,9 @@ limitations under the License.
 package access
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/apache/incubator-devlake/core/dal"
 	"github.com/apache/incubator-devlake/core/errors"
@@ -362,5 +364,175 @@ func TestPersistGenericSelectionResetsDemotedProviderState(t *testing.T) {
 	}
 	if newProvider.GrafanaSyncedRevision != 3 {
 		t.Fatalf("newProvider.GrafanaSyncedRevision = %v, want 3", newProvider.GrafanaSyncedRevision)
+	}
+}
+
+type adminTestRuntimeStub struct{}
+
+func (*adminTestRuntimeStub) PrepareOIDCProvider(context.Context, *OIDCProvider, string) (*PreparedOIDCProvider, errors.Error) {
+	return &PreparedOIDCProvider{
+		EncryptedClientSecret: []byte("encrypted"),
+		ClientSecretNonce:     []byte("nonce"),
+		ClientSecretKeyID:     "key-id",
+	}, nil
+}
+func (*adminTestRuntimeStub) RefreshOIDCProvider(context.Context) errors.Error { return nil }
+func (*adminTestRuntimeStub) RevokeProviderSessions(dal.Transaction, string) ([]string, errors.Error) {
+	return nil, nil
+}
+func (*adminTestRuntimeStub) CacheRevokedSessions([]string) {}
+
+func TestSaveOIDCProviderReusesRetiredProviderRow(t *testing.T) {
+	db := &mockdal.Dal{}
+	tx := &mockdal.Transaction{}
+
+	retiredAt := time.Now().Add(-1 * time.Hour)
+	retired := &OIDCProvider{
+		ProviderKey: "reusable-provider",
+		DisplayName: "Old Display",
+		IssuerURL:   "https://issuer.example.com",
+		ClientID:    "client-id",
+		Revision:    3,
+		RetiredAt:   &retiredAt,
+	}
+	retired.ID = 42
+
+	notFoundErr := errors.NotFound.New("not found")
+	db.On("IsErrorNotFound", notFoundErr).Return(true)
+
+	// 1. resolveOIDCProviderInput:
+	// Active provider query -> not found
+	db.On("First", mock.AnythingOfType("*access.OIDCProvider"), mock.MatchedBy(func(clauses []dal.Clause) bool {
+		return len(clauses) > 0 && clauses[0].Data.(dal.DalClause).Expr == "provider_key = ? AND retired_at IS NULL"
+	})).Return(notFoundErr).Once()
+	// Retired provider query -> found retired
+	db.On("First", mock.AnythingOfType("*access.OIDCProvider"), mock.MatchedBy(func(clauses []dal.Clause) bool {
+		return len(clauses) > 0 && clauses[0].Data.(dal.DalClause).Expr == "provider_key = ? AND retired_at IS NOT NULL"
+	})).Run(func(args mock.Arguments) {
+		p := args.Get(0).(*OIDCProvider)
+		*p = *retired
+	}).Return(nil).Once()
+
+	// 2. ensureIssuerAvailable:
+	db.On("First", mock.AnythingOfType("*access.OIDCProvider"), mock.MatchedBy(func(clauses []dal.Clause) bool {
+		return len(clauses) > 0 && clauses[0].Data.(dal.DalClause).Expr == "issuer_url = ? AND retired_at IS NULL AND id <> ?"
+	})).Return(notFoundErr).Once()
+
+	// 3. validateGrafanaTargetAssignment:
+	db.On("All", mock.AnythingOfType("*[]access.OIDCProvider"), mock.Anything).Return(nil).Once()
+
+	// 4. persistOIDCCandidate:
+	db.On("Begin").Return(tx).Once()
+	var updatedProvider *OIDCProvider
+	tx.On("Update", mock.AnythingOfType("*access.OIDCProvider")).Run(func(args mock.Arguments) {
+		p := args.Get(0).(*OIDCProvider)
+		updatedProvider = p
+	}).Return(nil).Once()
+	tx.On("Commit").Return(nil).Once()
+
+	// 5. audit:
+	db.On("Create", mock.AnythingOfType("*access.AuditEvent")).Return(nil).Once()
+
+	// 6. databaseOIDCConfiguration:
+	db.On("First", mock.AnythingOfType("*access.OIDCProviderConfiguration"), mock.Anything).Return(notFoundErr).Maybe()
+
+	service := &Service{
+		cfg: Config{
+			AuthPublicURL:    "https://auth.example.com",
+			GrafanaPublicURL: "https://grafana.example.com",
+		},
+		db:          db,
+		oidcRuntime: &adminTestRuntimeStub{},
+	}
+
+	input := OIDCProviderInput{
+		ProviderKey:   "reusable-provider",
+		DisplayName:   "Reactivated Provider",
+		IssuerURL:     "https://issuer.example.com",
+		ClientID:      "client-id",
+		ClientSecret:  "new-secret",
+		Scopes:        "openid profile email",
+		GrafanaTarget: GrafanaProviderGenericOAuth,
+	}
+
+	res, err := service.SaveOIDCProvider(context.Background(), "admin@example.com", input)
+	if err != nil {
+		t.Fatalf("SaveOIDCProvider() unexpected error = %v", err)
+	}
+
+	if updatedProvider == nil {
+		t.Fatal("expected tx.Update to be called on retired provider row")
+	}
+	if updatedProvider.ID != 42 {
+		t.Fatalf("updated provider ID = %d, want 42", updatedProvider.ID)
+	}
+	if updatedProvider.RetiredAt != nil {
+		t.Fatalf("updated provider RetiredAt = %v, want nil", updatedProvider.RetiredAt)
+	}
+	if updatedProvider.Revision != 4 {
+		t.Fatalf("updated provider Revision = %d, want 4", updatedProvider.Revision)
+	}
+	if updatedProvider.Enabled {
+		t.Fatal("reactivated provider should start disabled")
+	}
+	if res.ProviderKey != "reusable-provider" {
+		t.Fatalf("res.ProviderKey = %s, want reusable-provider", res.ProviderKey)
+	}
+}
+
+func TestSaveOIDCProviderRejectsRetiredProviderWithMismatchedIssuer(t *testing.T) {
+	db := &mockdal.Dal{}
+
+	retiredAt := time.Now().Add(-1 * time.Hour)
+	retired := &OIDCProvider{
+		ProviderKey: "reusable-provider",
+		DisplayName: "Old Display",
+		IssuerURL:   "https://original-issuer.example.com",
+		ClientID:    "client-id",
+		Revision:    3,
+		RetiredAt:   &retiredAt,
+	}
+	retired.ID = 42
+
+	notFoundErr := errors.NotFound.New("not found")
+	db.On("IsErrorNotFound", notFoundErr).Return(true)
+
+	// Active query -> not found
+	db.On("First", mock.AnythingOfType("*access.OIDCProvider"), mock.MatchedBy(func(clauses []dal.Clause) bool {
+		return len(clauses) > 0 && clauses[0].Data.(dal.DalClause).Expr == "provider_key = ? AND retired_at IS NULL"
+	})).Return(notFoundErr).Once()
+	// Retired query -> returns original issuer
+	db.On("First", mock.AnythingOfType("*access.OIDCProvider"), mock.MatchedBy(func(clauses []dal.Clause) bool {
+		return len(clauses) > 0 && clauses[0].Data.(dal.DalClause).Expr == "provider_key = ? AND retired_at IS NOT NULL"
+	})).Run(func(args mock.Arguments) {
+		p := args.Get(0).(*OIDCProvider)
+		*p = *retired
+	}).Return(nil).Once()
+
+	service := &Service{
+		cfg: Config{
+			AuthPublicURL:    "https://auth.example.com",
+			GrafanaPublicURL: "https://grafana.example.com",
+		},
+		db:          db,
+		oidcRuntime: &adminTestRuntimeStub{},
+	}
+
+	input := OIDCProviderInput{
+		ProviderKey:   "reusable-provider",
+		DisplayName:   "Repurposed Provider",
+		IssuerURL:     "https://different-issuer.example.com",
+		ClientID:      "client-id",
+		ClientSecret:  "secret",
+		Scopes:        "openid profile email",
+		GrafanaTarget: GrafanaProviderGenericOAuth,
+	}
+
+	_, err := service.SaveOIDCProvider(context.Background(), "admin@example.com", input)
+	if err == nil {
+		t.Fatal("expected error when reusing retired provider with different issuer")
+	}
+	if err.GetData() != ErrCodeProviderBlocked {
+		t.Fatalf("error code = %v, want %s", err.GetData(), ErrCodeProviderBlocked)
 	}
 }

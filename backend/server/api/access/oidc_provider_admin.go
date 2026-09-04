@@ -99,6 +99,11 @@ func (s *Service) SaveOIDCProvider(ctx context.Context, actor string, input OIDC
 	if resolveErr != nil {
 		return nil, resolveErr
 	}
+	if current != nil {
+		provider.ID = current.ID
+		provider.CreatedAt = current.CreatedAt
+		provider.RetiredAt = nil
+	}
 	if current != nil && input.Revision != 0 && current.Revision != input.Revision {
 		return nil, errors.BadInput.New("the OIDC provider changed; refresh it before saving", errors.WithData(ErrCodeProviderRevisionConflict))
 	}
@@ -131,19 +136,39 @@ func (s *Service) SaveOIDCProvider(ctx context.Context, actor string, input OIDC
 func (s *Service) resolveOIDCProviderInput(provider *OIDCProvider, clientSecret string) (*OIDCProvider, errors.Error) {
 	current := &OIDCProvider{}
 	if err := s.db.First(current, dal.Where("provider_key = ? AND retired_at IS NULL", provider.ProviderKey)); err != nil {
-		if s.db.IsErrorNotFound(err) {
-			return nil, reuseOIDCProviderCredential(provider, nil, clientSecret)
+		if !s.db.IsErrorNotFound(err) {
+			return nil, errors.Default.Wrap(err, "error reading OIDC provider")
 		}
-		return nil, errors.Default.Wrap(err, "error reading OIDC provider")
+		current = nil
+	}
+	if current == nil {
+		retired := &OIDCProvider{}
+		if err := s.db.First(retired, dal.Where("provider_key = ? AND retired_at IS NOT NULL", provider.ProviderKey)); err != nil {
+			if !s.db.IsErrorNotFound(err) {
+				return nil, errors.Default.Wrap(err, "error reading retired OIDC provider")
+			}
+			retired = nil
+		}
+		if retired != nil {
+			if retired.IssuerURL != provider.IssuerURL {
+				return nil, errors.BadInput.New("OIDC provider key and issuer must match a retired provider before it can be reused", errors.WithData(ErrCodeProviderBlocked))
+			}
+			current = retired
+		}
+	}
+	if current == nil {
+		return nil, reuseOIDCProviderCredential(provider, nil, clientSecret)
 	}
 	if current.IssuerURL != provider.IssuerURL {
 		return nil, errors.BadInput.New("an existing OIDC provider issuer cannot be changed; create a new provider instead", errors.WithData(ErrCodeProviderBlocked))
 	}
 	credentialSource := current
-	if _, candidate, err := s.currentOIDCProvider(provider.ProviderKey); err != nil {
-		return nil, err
-	} else if candidate != nil {
-		credentialSource = oidcProviderFromCandidate(candidate)
+	if current.RetiredAt == nil {
+		if _, candidate, err := s.currentOIDCProvider(provider.ProviderKey); err != nil {
+			return nil, err
+		} else if candidate != nil {
+			credentialSource = oidcProviderFromCandidate(candidate)
+		}
 	}
 	if err := reuseOIDCProviderCredential(provider, credentialSource, clientSecret); err != nil {
 		return nil, err
@@ -153,12 +178,12 @@ func (s *Service) resolveOIDCProviderInput(provider *OIDCProvider, clientSecret 
 
 func (s *Service) validateGrafanaTargetAssignment(provider, current *OIDCProvider) errors.Error {
 	if provider.GrafanaTarget == GrafanaProviderNone {
-		if current != nil && current.GrafanaTarget != GrafanaProviderNone {
+		if current != nil && current.RetiredAt == nil && current.GrafanaTarget != GrafanaProviderNone {
 			return errors.BadInput.New("an active Grafana provider mapping cannot be removed by editing; select a replacement or retire the provider", errors.WithData(ErrCodeProviderBlocked))
 		}
 		return nil
 	}
-	if current != nil && current.GrafanaTarget != provider.GrafanaTarget {
+	if current != nil && current.RetiredAt == nil && current.GrafanaTarget != provider.GrafanaTarget {
 		return errors.BadInput.New("an active Grafana provider mapping cannot be changed by editing; use the explicit Grafana selection action", errors.WithData(ErrCodeProviderBlocked))
 	}
 	currentID := uint64(0)
