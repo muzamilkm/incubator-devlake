@@ -77,6 +77,7 @@ export const Authentication = ({ callbacks, providers, loadFailed, onRefresh }: 
     });
     if (!success) {
       setPageError(getOIDCProviderError(result));
+      onRefresh();
       return;
     }
     if (action === 'grafana-sync') {

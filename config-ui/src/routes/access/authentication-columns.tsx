@@ -172,8 +172,9 @@ export const getAuthenticationColumns = ({
             </Button>
           </Popconfirm>
         )}
-        {(provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.FAILED ||
-          provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.COMPENSATION_FAILED) && (
+        {!provider.hasCandidate &&
+          (provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.FAILED ||
+            provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.COMPENSATION_FAILED) && (
           <Button
             size="small"
             loading={isActionOperating('grafana-sync', provider.providerKey)}

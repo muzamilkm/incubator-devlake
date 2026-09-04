@@ -33,18 +33,20 @@ func (s *Service) RetryGrafanaOIDCProviderSync(ctx context.Context, actor, provi
 	if err != nil {
 		return nil, err
 	}
-	effective := effectiveOIDCProvider(provider, candidate)
-	if effective.GrafanaTarget == GrafanaProviderNone {
+	if candidate != nil {
+		return nil, errors.BadInput.New("activate the staged OIDC provider revision to synchronize it", errors.WithData(ErrCodeProviderBlocked))
+	}
+	if provider.GrafanaTarget == GrafanaProviderNone {
 		return s.providerResponse(provider)
 	}
 	if s.oidcRuntime == nil || s.grafanaSSO == nil {
 		return nil, errors.Unavailable.New("Grafana SSO administration is not configured", errors.WithData(ErrCodeProviderBlocked))
 	}
-	prepared, prepareErr := s.oidcRuntime.PrepareOIDCProvider(ctx, effective, "")
+	prepared, prepareErr := s.oidcRuntime.PrepareOIDCProvider(ctx, provider, "")
 	if prepareErr != nil {
 		return nil, prepareErr
 	}
-	if syncErr := s.syncGrafana(ctx, effective, prepared.GrafanaSettings, provider.Enabled && candidate == nil); syncErr != nil {
+	if syncErr := s.syncGrafana(ctx, provider, prepared.GrafanaSettings, provider.Enabled); syncErr != nil {
 		s.audit(actor, auditProviderGrafanaSyncFailed, nil, providerAuditDetail(providerKey))
 		return nil, syncErr
 	}
