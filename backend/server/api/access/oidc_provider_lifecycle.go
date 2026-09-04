@@ -43,7 +43,8 @@ func (s *Service) ActivateOIDCProvider(ctx context.Context, actor, providerKey s
 	if assignmentErr := s.ensureGrafanaTargetAvailable(effective.GrafanaTarget, provider.ID); assignmentErr != nil {
 		return nil, assignmentErr
 	}
-	if effective.GrafanaTarget != GrafanaProviderNone {
+	hasGrafanaSync := effective.GrafanaTarget != GrafanaProviderNone
+	if hasGrafanaSync {
 		if s.grafanaSSO == nil {
 			return nil, errors.Unavailable.New("Grafana SSO administration is not configured", errors.WithData(ErrCodeProviderBlocked))
 		}
@@ -51,13 +52,16 @@ func (s *Service) ActivateOIDCProvider(ctx context.Context, actor, providerKey s
 		if prepareErr != nil {
 			return nil, prepareErr
 		}
-		if syncErr := s.syncGrafana(ctx, effective, prepared.GrafanaSettings, true); syncErr != nil {
+		prepared.GrafanaSettings.Enabled = true
+		if syncErr := s.grafanaSSO.PutProvider(ctx, effective.GrafanaTarget, prepared.GrafanaSettings); syncErr != nil {
+			s.logger.Error(syncErr, "access: Grafana OAuth synchronization failed provider=%s target=%s", effective.ProviderKey, effective.GrafanaTarget)
+			s.recordGrafanaSyncFailure(provider)
 			s.audit(actor, auditProviderGrafanaSyncFailed, nil, providerAuditDetail(providerKey))
-			return nil, syncErr
+			return nil, errors.Unavailable.New("Grafana OAuth configuration could not be synchronized", errors.WithData(ErrCodeProviderBlocked))
 		}
 	}
-	if activateErr := s.activateOIDCProvider(provider, candidate); activateErr != nil {
-		if candidate != nil && effective.GrafanaTarget != GrafanaProviderNone {
+	if activateErr := s.activateOIDCProvider(provider, candidate, hasGrafanaSync, effective.Revision); activateErr != nil {
+		if candidate != nil && hasGrafanaSync {
 			if compensationErr := s.restoreGrafanaProvider(ctx, provider); compensationErr != nil {
 				s.recordGrafanaCompensationFailure(provider, compensationErr)
 				return nil, errors.Unavailable.New("OIDC provider activation requires operator recovery", errors.WithData(ErrCodeProviderBlocked))
@@ -65,18 +69,17 @@ func (s *Service) ActivateOIDCProvider(ctx context.Context, actor, providerKey s
 			if compensationErr := s.recordGrafanaCompensated(provider, provider.GrafanaSyncedRevision); compensationErr != nil {
 				return nil, compensationErr
 			}
+		} else if hasGrafanaSync {
+			s.recordGrafanaCompensationFailure(provider, activateErr)
+			return nil, errors.Unavailable.New("OIDC provider activation requires operator recovery", errors.WithData(ErrCodeProviderBlocked))
 		}
 		return nil, activateErr
 	}
 	if refreshErr := s.oidcRuntime.RefreshOIDCProvider(ctx); refreshErr != nil {
 		return nil, errors.Unavailable.New("OIDC provider was activated but is not ready; retry after provider discovery recovers", errors.WithData(ErrCodeProviderBlocked))
 	}
-	provider.GrafanaSyncStatus = effective.GrafanaSyncStatus
-	provider.GrafanaSyncedRevision = effective.GrafanaSyncedRevision
-	provider.GrafanaLastSyncedAt = effective.GrafanaLastSyncedAt
-	provider.GrafanaLastErrorCode = effective.GrafanaLastErrorCode
 	s.audit(actor, auditProviderActivated, nil, providerAuditDetail(providerKey))
-	return s.providerResponse(provider), nil
+	return s.providerResponse(provider)
 }
 
 func (s *Service) restoreGrafanaProvider(ctx context.Context, provider *OIDCProvider) errors.Error {
@@ -110,7 +113,7 @@ func (s *Service) EnableOIDCProvider(ctx context.Context, actor, providerKey str
 		return nil, errors.BadInput.New("activate database OIDC configuration before enabling the provider", errors.WithData(ErrCodeProviderBlocked))
 	}
 	if provider.Enabled {
-		return s.providerResponse(provider), nil
+		return s.providerResponse(provider)
 	}
 	if provider.GrafanaTarget != GrafanaProviderNone {
 		if s.grafanaSSO == nil || s.oidcRuntime == nil {
@@ -139,7 +142,7 @@ func (s *Service) DisableOIDCProvider(ctx context.Context, actor, providerKey st
 		return nil, errors.BadInput.New("activate or replace the staged OIDC provider revision before disabling it", errors.WithData(ErrCodeProviderBlocked))
 	}
 	if !provider.Enabled {
-		return s.providerResponse(provider), nil
+		return s.providerResponse(provider)
 	}
 	if err := s.ensureAnotherEnabledProvider(provider.ID); err != nil {
 		return nil, err
@@ -166,18 +169,25 @@ func (s *Service) RetireOIDCProvider(ctx context.Context, actor, providerKey str
 	return s.setOIDCProviderRetired(ctx, actor, provider)
 }
 
-func (s *Service) activateOIDCProvider(provider *OIDCProvider, candidate *OIDCProviderCandidate) errors.Error {
+func (s *Service) activateOIDCProvider(provider *OIDCProvider, candidate *OIDCProviderCandidate, syncGrafana bool, syncedRevision uint64) errors.Error {
 	now := time.Now()
 	err := s.withTransaction("OIDC provider activation", func(tx dal.Transaction) errors.Error {
+		providerSets := []dal.DalSet{{ColumnName: "enabled", Value: true}}
 		if candidate != nil {
-			if err := tx.UpdateColumns(&OIDCProvider{}, providerPromotionSets(candidate), dal.Where("id = ?", provider.ID)); err != nil {
-				return errors.Default.Wrap(err, "error promoting OIDC provider candidate")
-			}
+			providerSets = append(providerSets, providerPromotionSets(candidate)...)
 			if err := tx.UpdateColumns(&OIDCProviderCandidate{}, []dal.DalSet{{ColumnName: "promoted_at", Value: now}}, dal.Where("id = ?", candidate.ID)); err != nil {
 				return errors.Default.Wrap(err, "error recording OIDC provider candidate promotion")
 			}
 		}
-		if err := tx.UpdateColumns(&OIDCProvider{}, []dal.DalSet{{ColumnName: "enabled", Value: true}}, dal.Where("id = ? AND retired_at IS NULL", provider.ID)); err != nil {
+		if syncGrafana {
+			providerSets = append(providerSets, []dal.DalSet{
+				{ColumnName: "grafana_sync_status", Value: OIDCProviderStatusSynchronized},
+				{ColumnName: "grafana_synced_revision", Value: syncedRevision},
+				{ColumnName: "grafana_last_synced_at", Value: now},
+				{ColumnName: "grafana_last_error_code", Value: ""},
+			}...)
+		}
+		if err := tx.UpdateColumns(&OIDCProvider{}, providerSets, dal.Where("id = ? AND retired_at IS NULL", provider.ID)); err != nil {
 			return errors.Default.Wrap(err, "error enabling OIDC provider")
 		}
 		cfg := &OIDCProviderConfiguration{}
@@ -202,6 +212,12 @@ func (s *Service) activateOIDCProvider(provider *OIDCProvider, candidate *OIDCPr
 	provider.Enabled = true
 	if candidate != nil {
 		applyCandidate(provider, candidate)
+	}
+	if syncGrafana {
+		provider.GrafanaSyncStatus = OIDCProviderStatusSynchronized
+		provider.GrafanaSyncedRevision = syncedRevision
+		provider.GrafanaLastSyncedAt = &now
+		provider.GrafanaLastErrorCode = ""
 	}
 	return nil
 }
@@ -258,7 +274,7 @@ func (s *Service) setOIDCProviderEnabled(ctx context.Context, actor string, prov
 		action = auditProviderEnabled
 	}
 	s.audit(actor, action, nil, providerAuditDetail(provider.ProviderKey))
-	return s.providerResponse(provider), nil
+	return s.providerResponse(provider)
 }
 
 func (s *Service) setOIDCProviderRetired(ctx context.Context, actor string, provider *OIDCProvider) (*OIDCProviderResponse, errors.Error) {
@@ -291,7 +307,7 @@ func (s *Service) setOIDCProviderRetired(ctx context.Context, actor string, prov
 		return nil, errors.Unavailable.New("OIDC provider retirement completed but runtime refresh failed", errors.WithData(ErrCodeProviderBlocked))
 	}
 	s.audit(actor, auditProviderRetired, nil, providerAuditDetail(provider.ProviderKey))
-	return s.providerResponse(provider), nil
+	return s.providerResponse(provider)
 }
 
 func (s *Service) ensureAnotherEnabledProvider(providerID uint64) errors.Error {

@@ -130,7 +130,7 @@ func (s *Service) SaveOIDCProvider(ctx context.Context, actor string, input OIDC
 		action = auditProviderUpdated
 	}
 	s.audit(actor, action, nil, providerAuditDetail(persisted.ProviderKey))
-	return s.providerResponse(persisted), nil
+	return s.providerResponse(persisted)
 }
 
 func (s *Service) resolveOIDCProviderInput(provider *OIDCProvider, clientSecret string) (*OIDCProvider, errors.Error) {
@@ -238,10 +238,10 @@ func normalizeOIDCProviderKey(value string) (string, errors.Error) {
 	return value, nil
 }
 
-func (s *Service) providerResponse(provider *OIDCProvider) *OIDCProviderResponse {
+func (s *Service) providerResponse(provider *OIDCProvider) (*OIDCProviderResponse, errors.Error) {
 	configuration, err := s.databaseOIDCConfiguration()
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return oidcProviderResponse(provider, configuration)
+	return oidcProviderResponse(provider, configuration), nil
 }

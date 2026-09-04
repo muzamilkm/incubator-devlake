@@ -115,12 +115,10 @@ func TestActivationFailureCompensatesAndPreservesGrafanaSyncedRevision(t *testin
 	// 2. ensureGrafanaTargetAvailable
 	db.EXPECT().All(mock.AnythingOfType("*[]access.OIDCProvider"), mock.Anything).Return(nil).Once()
 
-	// 3. syncGrafana updates DB on successful Grafana sync for candidate
-	db.EXPECT().UpdateColumns(mock.AnythingOfType("*access.OIDCProvider"), mock.Anything, mock.Anything).Return(nil).Once()
-
-	// 4. activateOIDCProvider transaction fails
+	// 3. activateOIDCProvider transaction fails
 	dbErr := errors.Default.New("activation DB failure")
 	db.EXPECT().Begin().Return(txActivate).Once()
+	txActivate.EXPECT().UpdateColumns(mock.AnythingOfType("*access.OIDCProviderCandidate"), mock.Anything, mock.Anything).Return(nil).Once()
 	txActivate.EXPECT().UpdateColumns(mock.AnythingOfType("*access.OIDCProvider"), mock.Anything, mock.Anything).Return(dbErr).Once()
 	txActivate.EXPECT().Rollback().Return(nil).Once()
 

@@ -43,7 +43,6 @@ export const Authentication = ({ callbacks, providers, loadFailed, onRefresh }: 
   const [selectedProvider, setSelectedProvider] = useState<OIDCProvider>();
   const [operating, setOperating] = useState<ActiveOperation>();
   const [pageError, setPageError] = useState<string>();
-  const [pageWarning, setPageWarning] = useState<string>();
 
   const isOperating = Boolean(operating);
   const authenticationState = getAuthenticationState(providers);
@@ -53,7 +52,6 @@ export const Authentication = ({ callbacks, providers, loadFailed, onRefresh }: 
   const openEditor = (provider?: OIDCProvider) => {
     setSelectedProvider(provider);
     setPageError(undefined);
-    setPageWarning(undefined);
     setEditorOpen(true);
   };
 
@@ -63,7 +61,6 @@ export const Authentication = ({ callbacks, providers, loadFailed, onRefresh }: 
 
   const performAction = async (action: Exclude<Operation, 'validate' | 'save'>, provider: OIDCProvider) => {
     setPageError(undefined);
-    setPageWarning(undefined);
     const requests = {
       activate: () => API.access.activateOIDCProvider(provider.providerKey),
       enable: () => API.access.enableOIDCProvider(provider.providerKey),
@@ -134,16 +131,6 @@ export const Authentication = ({ callbacks, providers, loadFailed, onRefresh }: 
       </SectionHeader>
       <Message content="Grafana access remains independently managed. Providers marked DevLake only use Grafana's ordinary login." />
       {pageError && <Alert type="error" showIcon message={pageError} style={{ marginTop: 16 }} />}
-      {pageWarning && (
-        <Alert
-          type="warning"
-          showIcon
-          closable
-          onClose={() => setPageWarning(undefined)}
-          message={pageWarning}
-          style={{ marginTop: 16 }}
-        />
-      )}
       <Table
         rowKey="providerKey"
         size="middle"

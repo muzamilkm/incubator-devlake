@@ -238,8 +238,9 @@ type OIDCProvider struct {
 func (OIDCProvider) TableName() string { return "auth_oidc_providers" }
 
 // OIDCProviderCandidate holds a pending revision separately from the active provider.
-// It keeps an authenticated source live while a replacement is validated and staged in
-// Grafana, and is retained after promotion for audit/recovery rather than hard-deleted.
+// It keeps an authenticated source live while a replacement is validated and staged,
+// and is synchronized to Grafana upon activation. Candidates are retained after promotion
+// for audit/recovery rather than hard-deleted.
 type OIDCProviderCandidate struct {
 	common.Model
 	ProviderID            uint64 `gorm:"index:idx_auth_oidc_provider_candidate_provider"`

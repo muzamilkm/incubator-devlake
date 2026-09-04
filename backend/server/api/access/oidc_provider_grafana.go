@@ -35,7 +35,7 @@ func (s *Service) RetryGrafanaOIDCProviderSync(ctx context.Context, actor, provi
 	}
 	effective := effectiveOIDCProvider(provider, candidate)
 	if effective.GrafanaTarget == GrafanaProviderNone {
-		return s.providerResponse(provider), nil
+		return s.providerResponse(provider)
 	}
 	if s.oidcRuntime == nil || s.grafanaSSO == nil {
 		return nil, errors.Unavailable.New("Grafana SSO administration is not configured", errors.WithData(ErrCodeProviderBlocked))
@@ -49,7 +49,7 @@ func (s *Service) RetryGrafanaOIDCProviderSync(ctx context.Context, actor, provi
 		return nil, syncErr
 	}
 	s.audit(actor, auditProviderGrafanaSyncSucceeded, nil, providerAuditDetail(providerKey))
-	return s.providerResponse(provider), nil
+	return s.providerResponse(provider)
 }
 
 // SelectGenericOIDCProvider switches Grafana's single generic OAuth slot only
@@ -101,7 +101,7 @@ func (s *Service) SelectGenericOIDCProvider(ctx context.Context, actor, provider
 		return nil, err
 	}
 	s.audit(actor, auditProviderGrafanaTargetSelected, nil, providerAuditDetail(providerKey))
-	return s.providerResponse(provider), nil
+	return s.providerResponse(provider)
 }
 
 func (s *Service) selectedGrafanaProvider(target GrafanaProviderKind, excludedID uint64) (*OIDCProvider, errors.Error) {
@@ -132,6 +132,7 @@ func (s *Service) syncGrafana(ctx context.Context, provider *OIDCProvider, setti
 		{ColumnName: "grafana_last_synced_at", Value: now},
 		{ColumnName: "grafana_last_error_code", Value: ""},
 	}, dal.Where("id = ?", provider.ID)); err != nil {
+		s.recordGrafanaCompensationFailure(provider, err)
 		return errors.Default.Wrap(err, "error recording Grafana OIDC synchronization")
 	}
 	provider.GrafanaSyncStatus = OIDCProviderStatusSynchronized
