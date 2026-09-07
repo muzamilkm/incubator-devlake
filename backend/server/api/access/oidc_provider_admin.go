@@ -19,6 +19,7 @@ package access
 
 import (
 	"context"
+	"strings"
 
 	"github.com/apache/incubator-devlake/core/dal"
 	"github.com/apache/incubator-devlake/core/errors"
@@ -34,36 +35,32 @@ const (
 	auditProviderGrafanaSyncSucceeded      = "provider.grafana_sync_succeeded"
 	auditProviderGrafanaSyncFailed         = "provider.grafana_sync_failed"
 	auditProviderGrafanaCompensationFailed = "provider.grafana_sync_compensation_failed"
+	auditProviderGrafanaTargetSelected     = "provider.grafana_target_selected"
 )
 
-func (s *Service) GetOIDCProvider() (*OIDCProviderResponse, errors.Error) {
-	configuration := &OIDCProviderConfiguration{}
-	if err := s.db.First(configuration, dal.Where("id = ?", OIDCProviderSourceKey)); err != nil {
-		if s.db.IsErrorNotFound(err) {
-			return &OIDCProviderResponse{GrafanaSyncStatus: OIDCProviderStatusPending}, nil
-		}
-		return nil, errors.Default.Wrap(err, "error reading OIDC provider configuration")
+func (s *Service) GetOIDCProviders() ([]*OIDCProviderResponse, errors.Error) {
+	providers := make([]OIDCProvider, 0)
+	if err := s.db.All(&providers, dal.Where("retired_at IS NULL"), dal.Orderby("provider_key ASC")); err != nil {
+		return nil, errors.Default.Wrap(err, "error listing OIDC providers")
 	}
-	if configuration.CandidateProviderID != 0 {
-		candidate := &OIDCProviderCandidate{}
-		if err := s.db.First(candidate, dal.Where("id = ? AND promoted_at IS NULL", configuration.CandidateProviderID)); err != nil {
-			return nil, errors.Default.Wrap(err, "error reading OIDC provider candidate")
-		}
-		return oidcProviderResponse(oidcProviderFromCandidate(candidate), configuration), nil
+	configuration, err := s.databaseOIDCConfiguration()
+	if err != nil {
+		return nil, err
 	}
-	provider := &OIDCProvider{}
-	if err := s.db.First(provider, dal.Where("retired_at IS NULL")); err != nil {
-		if s.db.IsErrorNotFound(err) {
-			return &OIDCProviderResponse{
-				DatabaseSourceActive:  configuration.ActivatedAt != nil,
-				GrafanaSyncStatus:     configuration.GrafanaSyncStatus,
-				GrafanaSyncedRevision: configuration.GrafanaSyncedRevision,
-				ProviderRevision:      configuration.ProviderRevision,
-			}, nil
+	responses := make([]*OIDCProviderResponse, 0, len(providers))
+	for index := range providers {
+		provider := &providers[index]
+		if _, candidate, candidateErr := s.currentOIDCProvider(provider.ProviderKey); candidateErr != nil {
+			return nil, candidateErr
+		} else if candidate != nil {
+			response := oidcProviderResponse(effectiveOIDCProvider(provider, candidate), configuration)
+			response.HasCandidate = true
+			responses = append(responses, response)
+			continue
 		}
-		return nil, errors.Default.Wrap(err, "error reading OIDC provider")
+		responses = append(responses, oidcProviderResponse(provider, configuration))
 	}
-	return oidcProviderResponse(provider, configuration), nil
+	return responses, nil
 }
 
 func (s *Service) ValidateOIDCProvider(ctx context.Context, input OIDCProviderInput) errors.Error {
@@ -77,7 +74,7 @@ func (s *Service) ValidateOIDCProvider(ctx context.Context, input OIDCProviderIn
 	if s.oidcRuntime == nil {
 		return errors.Unavailable.New("OIDC provider administration is not configured", errors.WithData(ErrCodeProviderBlocked))
 	}
-	if _, _, err := s.resolveOIDCProviderInput(provider, secret); err != nil {
+	if _, err := s.resolveOIDCProviderInput(provider, secret); err != nil {
 		return err
 	}
 	_, runtimeErr := s.oidcRuntime.PrepareOIDCProvider(ctx, provider, secret)
@@ -98,24 +95,33 @@ func (s *Service) SaveOIDCProvider(ctx context.Context, actor string, input OIDC
 	if s.oidcRuntime == nil {
 		return nil, errors.Unavailable.New("OIDC provider administration is not configured", errors.WithData(ErrCodeProviderBlocked))
 	}
-	configuration, current, resolveErr := s.resolveOIDCProviderInput(provider, secret)
+	current, resolveErr := s.resolveOIDCProviderInput(provider, secret)
 	if resolveErr != nil {
 		return nil, resolveErr
 	}
 	if current != nil {
 		provider.ID = current.ID
 		provider.CreatedAt = current.CreatedAt
-		// A retired provider keeps its row for audit history. Reusing the same
-		// provider identity restores that row instead of colliding with its keys.
 		provider.RetiredAt = nil
 	}
-
+	if current != nil && input.Revision != 0 && current.Revision != input.Revision {
+		return nil, errors.BadInput.New("the OIDC provider changed; refresh it before saving", errors.WithData(ErrCodeProviderRevisionConflict))
+	}
+	currentID := uint64(0)
+	if current != nil {
+		currentID = current.ID
+	}
+	if issuerErr := s.ensureIssuerAvailable(provider.IssuerURL, currentID); issuerErr != nil {
+		return nil, issuerErr
+	}
+	if conflictErr := s.validateGrafanaTargetAssignment(provider, current); conflictErr != nil {
+		return nil, conflictErr
+	}
 	prepared, prepareErr := s.oidcRuntime.PrepareOIDCProvider(ctx, provider, secret)
 	if prepareErr != nil {
 		return nil, prepareErr
 	}
-
-	configuration, saveErr := s.persistOIDCCandidate(provider, prepared, current != nil && configuration.ActivatedAt != nil)
+	persisted, saveErr := s.persistOIDCCandidate(provider, prepared, current)
 	if saveErr != nil {
 		return nil, saveErr
 	}
@@ -123,108 +129,119 @@ func (s *Service) SaveOIDCProvider(ctx context.Context, actor string, input OIDC
 	if current != nil {
 		action = auditProviderUpdated
 	}
-	// The provider transaction has committed. Record its durable administration
-	// action before an independent Grafana call can fail.
-	s.audit(actor, action, nil, providerAuditDetail(provider.ProviderKey))
-	provider.Enabled = false
-	provider.EncryptedClientSecret = prepared.EncryptedClientSecret
-	provider.ClientSecretNonce = prepared.ClientSecretNonce
-	provider.ClientSecretKeyID = prepared.ClientSecretKeyID
-
-	// Saving a candidate changes only DevLake's durable desired state. Grafana is
-	// updated later by an explicit activation or retry action so a draft cannot
-	// change the customer-facing Grafana login configuration.
-	return oidcProviderResponse(provider, configuration), nil
+	s.audit(actor, action, nil, providerAuditDetail(persisted.ProviderKey))
+	return s.providerResponse(persisted)
 }
 
-// resolveOIDCProviderInput enforces the update contract without exposing a stored
-// credential. A configured credential can be reused only for the same OAuth client.
-func (s *Service) resolveOIDCProviderInput(provider *OIDCProvider, clientSecret string) (*OIDCProviderConfiguration, *OIDCProvider, errors.Error) {
-	configuration := &OIDCProviderConfiguration{}
-	configurationErr := s.db.First(configuration, dal.Where("id = ?", OIDCProviderSourceKey))
-	if configurationErr != nil {
-		if !s.db.IsErrorNotFound(configurationErr) {
-			return nil, nil, errors.Default.Wrap(configurationErr, "error reading OIDC provider configuration")
-		}
-		configuration = &OIDCProviderConfiguration{}
-	}
-
+func (s *Service) resolveOIDCProviderInput(provider *OIDCProvider, clientSecret string) (*OIDCProvider, errors.Error) {
 	current := &OIDCProvider{}
-	currentErr := s.db.First(current, dal.Where("retired_at IS NULL"))
-	if currentErr != nil {
-		if !s.db.IsErrorNotFound(currentErr) {
-			return nil, nil, errors.Default.Wrap(currentErr, "error reading OIDC provider")
+	if err := s.db.First(current, dal.Where("provider_key = ? AND retired_at IS NULL", provider.ProviderKey)); err != nil {
+		if !s.db.IsErrorNotFound(err) {
+			return nil, errors.Default.Wrap(err, "error reading OIDC provider")
 		}
 		current = nil
 	}
 	if current == nil {
-		retired, retiredErr := s.findReusableRetiredOIDCProvider(provider)
-		if retiredErr != nil {
-			return nil, nil, retiredErr
+		retired := &OIDCProvider{}
+		if err := s.db.First(retired, dal.Where("provider_key = ? AND retired_at IS NOT NULL", provider.ProviderKey)); err != nil {
+			if !s.db.IsErrorNotFound(err) {
+				return nil, errors.Default.Wrap(err, "error reading retired OIDC provider")
+			}
+			retired = nil
 		}
-		current = retired
+		if retired != nil {
+			if retired.IssuerURL != provider.IssuerURL {
+				return nil, errors.BadInput.New("OIDC provider key and issuer must match a retired provider before it can be reused", errors.WithData(ErrCodeProviderBlocked))
+			}
+			current = retired
+		}
 	}
-	if err := validateOIDCProviderIdentity(provider, current); err != nil {
-		return nil, nil, err
+	if current == nil {
+		return nil, reuseOIDCProviderCredential(provider, nil, clientSecret)
 	}
-
+	if current.IssuerURL != provider.IssuerURL {
+		return nil, errors.BadInput.New("an existing OIDC provider issuer cannot be changed; create a new provider instead", errors.WithData(ErrCodeProviderBlocked))
+	}
 	credentialSource := current
-	if configuration.CandidateProviderID != 0 {
-		candidate := &OIDCProviderCandidate{}
-		if err := s.db.First(candidate, dal.Where("id = ? AND promoted_at IS NULL", configuration.CandidateProviderID)); err != nil {
-			return nil, nil, errors.Default.Wrap(err, "error reading OIDC provider candidate")
+	if current.RetiredAt == nil {
+		if _, candidate, err := s.currentOIDCProvider(provider.ProviderKey); err != nil {
+			return nil, err
+		} else if candidate != nil {
+			credentialSource = oidcProviderFromCandidate(candidate)
 		}
-		credentialSource = oidcProviderFromCandidate(candidate)
 	}
 	if err := reuseOIDCProviderCredential(provider, credentialSource, clientSecret); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return configuration, current, nil
+	return current, nil
 }
 
-// findReusableRetiredOIDCProvider preserves provider identity and audit history
-// when an administrator re-adds the same retired provider. A partial key/issuer
-// match is rejected so a retained identity cannot be silently repurposed.
-func (s *Service) findReusableRetiredOIDCProvider(provider *OIDCProvider) (*OIDCProvider, errors.Error) {
-	retiredProviders := []OIDCProvider{}
-	if err := s.db.All(&retiredProviders, dal.Where("retired_at IS NOT NULL AND (provider_key = ? OR issuer_url = ?)", provider.ProviderKey, provider.IssuerURL)); err != nil {
-		return nil, errors.Default.Wrap(err, "error reading retired OIDC provider")
-	}
-	if len(retiredProviders) == 0 {
-		return nil, nil
-	}
-	if len(retiredProviders) != 1 || !sameOIDCProviderIdentity(provider, &retiredProviders[0]) {
-		return nil, errors.BadInput.New("OIDC provider key and issuer must match a retired provider before it can be reused", errors.WithData(ErrCodeProviderBlocked))
-	}
-	return &retiredProviders[0], nil
-}
-
-func validateOIDCProviderIdentity(provider, current *OIDCProvider) errors.Error {
-	if current == nil || sameOIDCProviderIdentity(provider, current) {
+func (s *Service) validateGrafanaTargetAssignment(provider, current *OIDCProvider) errors.Error {
+	if provider.GrafanaTarget == GrafanaProviderNone {
+		if current != nil && current.RetiredAt == nil && current.GrafanaTarget != GrafanaProviderNone {
+			return errors.BadInput.New("an active Grafana provider mapping cannot be removed by editing; select a replacement or retire the provider", errors.WithData(ErrCodeProviderBlocked))
+		}
 		return nil
 	}
-	return errors.BadInput.New("the current release requires the active OIDC provider key and issuer to remain unchanged", errors.WithData(ErrCodeProviderBlocked))
+	if current != nil && current.RetiredAt == nil && current.GrafanaTarget != provider.GrafanaTarget {
+		return errors.BadInput.New("an active Grafana provider mapping cannot be changed by editing; use the explicit Grafana selection action", errors.WithData(ErrCodeProviderBlocked))
+	}
+	currentID := uint64(0)
+	if current != nil {
+		currentID = current.ID
+	}
+	return s.ensureGrafanaTargetAvailable(provider.GrafanaTarget, currentID)
 }
 
-func sameOIDCProviderIdentity(first, second *OIDCProvider) bool {
-	return first.ProviderKey == second.ProviderKey && first.IssuerURL == second.IssuerURL
-}
-
-func reuseOIDCProviderCredential(provider, stored *OIDCProvider, clientSecret string) errors.Error {
-	if clientSecret != "" {
+func (s *Service) ensureGrafanaTargetAvailable(target GrafanaProviderKind, providerID uint64) errors.Error {
+	if target == GrafanaProviderNone {
 		return nil
 	}
-	if stored == nil {
-		return errors.BadInput.New("client secret is required", errors.WithData(ErrCodeInvalidProvider))
+	providers := make([]OIDCProvider, 0)
+	if err := s.db.All(&providers, dal.Where("grafana_target = ? AND retired_at IS NULL", target)); err != nil {
+		return errors.Default.Wrap(err, "error checking Grafana provider target")
 	}
-	if provider.ClientID != stored.ClientID {
-		return errors.BadInput.New("a replacement client secret is required when changing the client ID", errors.WithData(ErrCodeInvalidProvider))
+	for _, existing := range providers {
+		if existing.ID != providerID {
+			return errors.BadInput.New("another OIDC provider already controls this Grafana login", errors.WithData(ErrCodeGrafanaTargetConflict))
+		}
 	}
-	if !hasOIDCProviderSecret(stored) {
-		return errors.Default.New("stored OIDC provider credential is unavailable")
-	}
-	provider.EncryptedClientSecret = stored.EncryptedClientSecret
-	provider.ClientSecretNonce = stored.ClientSecretNonce
-	provider.ClientSecretKeyID = stored.ClientSecretKeyID
 	return nil
+}
+
+func (s *Service) ensureIssuerAvailable(issuerURL string, providerID uint64) errors.Error {
+	existing := &OIDCProvider{}
+	if err := s.db.First(existing, dal.Where("issuer_url = ? AND retired_at IS NULL AND id <> ?", issuerURL, providerID)); err == nil {
+		return errors.BadInput.New("another active OIDC provider already uses this issuer URL", errors.WithData(ErrCodeInvalidProvider))
+	} else if !s.db.IsErrorNotFound(err) {
+		return errors.Default.Wrap(err, "error checking existing OIDC provider issuer")
+	}
+	return nil
+}
+
+func (s *Service) databaseOIDCConfiguration() (*OIDCProviderConfiguration, errors.Error) {
+	configuration := &OIDCProviderConfiguration{}
+	if err := s.db.First(configuration, dal.Where("id = ?", OIDCProviderSourceKey)); err != nil {
+		if s.db.IsErrorNotFound(err) {
+			return &OIDCProviderConfiguration{}, nil
+		}
+		return nil, errors.Default.Wrap(err, "error reading OIDC provider configuration")
+	}
+	return configuration, nil
+}
+
+func normalizeOIDCProviderKey(value string) (string, errors.Error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if !validOIDCProviderKey(value) {
+		return "", errors.BadInput.New("provide a valid OIDC provider key", errors.WithData(ErrCodeInvalidProvider))
+	}
+	return value, nil
+}
+
+func (s *Service) providerResponse(provider *OIDCProvider) (*OIDCProviderResponse, errors.Error) {
+	configuration, err := s.databaseOIDCConfiguration()
+	if err != nil {
+		return nil, err
+	}
+	return oidcProviderResponse(provider, configuration), nil
 }

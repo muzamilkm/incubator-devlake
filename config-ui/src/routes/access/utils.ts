@@ -20,12 +20,13 @@ import axios, { HttpStatusCode } from 'axios';
 
 import {
   ACCESS_ERROR_CODE,
+  GRAFANA_PROVIDER_KIND,
   OIDC_PROVIDER_SYNC_STATUS,
   type AccessApiErrorResponse,
   type OIDCProvider,
   type OIDCProviderInput,
 } from '../../api/access';
-import { OIDC_PROVIDER_STATUS } from './constants';
+import { AUTHENTICATION_STATE, OIDC_PROVIDER_STATUS } from './constants';
 
 export const ACCESS_ERROR = {
   DUPLICATE_DOMAIN: 'This domain already has a DevLake access policy.',
@@ -36,6 +37,8 @@ export const ACCESS_ERROR = {
   INVALID_OIDC_PROVIDER: 'Enter valid OIDC provider settings and include the openid scope.',
   OIDC_PROVIDER_BLOCKED: 'OIDC provider settings cannot be applied until the deployment prerequisites are available.',
   OIDC_PROVIDER_FAILED: 'OIDC provider settings could not be completed. Please try again.',
+  OIDC_PROVIDER_STALE: 'This provider changed. Refresh the page before saving it.',
+  GRAFANA_TARGET_CONFLICT: 'Another provider already controls this Grafana sign-in option.',
 } as const;
 
 export const normalizeDomain = (value: string) => value.trim().toLowerCase();
@@ -103,7 +106,7 @@ export const getCreateDomainError = (error: unknown) => {
 export const normalizeOIDCProviderInput = (provider: OIDCProviderInput): OIDCProviderInput => ({
   providerKey: provider.providerKey.trim().toLowerCase(),
   displayName: provider.displayName.trim(),
-  issuerUrl: provider.issuerUrl.trim().replace(/\/+$/, ''),
+  issuerUrl: provider.issuerUrl.trim(),
   clientId: provider.clientId.trim(),
   clientSecret: provider.clientSecret.trim(),
   scopes: provider.scopes
@@ -111,6 +114,9 @@ export const normalizeOIDCProviderInput = (provider: OIDCProviderInput): OIDCPro
     .filter(Boolean)
     .filter((scope, index, scopes) => scopes.indexOf(scope) === index)
     .join(' '),
+  grafanaTarget: provider.grafanaTarget,
+  confirmDevlakeOnly: provider.confirmDevlakeOnly,
+  revision: provider.revision,
 });
 
 export const formFromOIDCProvider = (provider?: OIDCProvider): OIDCProviderInput => ({
@@ -120,6 +126,9 @@ export const formFromOIDCProvider = (provider?: OIDCProvider): OIDCProviderInput
   clientId: provider?.clientId ?? '',
   clientSecret: '',
   scopes: provider?.scopes ?? 'openid profile email',
+  grafanaTarget: provider?.grafanaTarget ?? GRAFANA_PROVIDER_KIND.NONE,
+  confirmDevlakeOnly: provider ? provider.grafanaTarget === GRAFANA_PROVIDER_KIND.NONE : false,
+  revision: provider?.providerRevision,
 });
 
 export const isValidOIDCProviderInput = (
@@ -144,7 +153,8 @@ export const isValidOIDCProviderInput = (
     normalized.clientId.length > 0 &&
     (!requiresReplacementSecret || normalized.clientSecret.length > 0) &&
     (issuer.protocol === 'https:' || (allowLocalOidc && isLocalHTTP)) &&
-    normalized.scopes.split(' ').includes('openid')
+    normalized.scopes.split(' ').includes('openid') &&
+    (normalized.grafanaTarget !== GRAFANA_PROVIDER_KIND.NONE || normalized.confirmDevlakeOnly)
   );
 };
 
@@ -154,33 +164,44 @@ export const getOIDCProviderError = (error: unknown) => {
   if (code === ACCESS_ERROR_CODE.OIDC_PROVIDER_BLOCKED || code === ACCESS_ERROR_CODE.OIDC_PROVIDER_MISSING) {
     return ACCESS_ERROR.OIDC_PROVIDER_BLOCKED;
   }
+  if (code === ACCESS_ERROR_CODE.OIDC_PROVIDER_REVISION_CONFLICT) return ACCESS_ERROR.OIDC_PROVIDER_STALE;
+  if (code === ACCESS_ERROR_CODE.GRAFANA_TARGET_CONFLICT) return ACCESS_ERROR.GRAFANA_TARGET_CONFLICT;
   return ACCESS_ERROR.OIDC_PROVIDER_FAILED;
 };
 
+export const getOIDCProviderErrorCode = (error: unknown) => extractOIDCProviderErrorCode(error);
+
 export const getOIDCProviderStatus = (provider?: OIDCProvider) => {
-  if (!provider?.providerKey) return OIDC_PROVIDER_STATUS.ENVIRONMENT;
+  if (!provider) return OIDC_PROVIDER_STATUS.CONFIGURED;
+  if (provider.retiredAt) return OIDC_PROVIDER_STATUS.RETIRED;
   if (provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.COMPENSATION_FAILED)
     return OIDC_PROVIDER_STATUS.RECOVERY;
-  if (provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.COMPENSATED) return OIDC_PROVIDER_STATUS.COMPENSATED;
+  if (provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.COMPENSATED)
+    return OIDC_PROVIDER_STATUS.COMPENSATED;
   if (provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.FAILED) return OIDC_PROVIDER_STATUS.FAILED;
-  if (!provider.databaseSourceActive) {
-    return provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.SYNCHRONIZED
-      ? OIDC_PROVIDER_STATUS.CONFIGURED
-      : OIDC_PROVIDER_STATUS.SYNCHRONIZING;
-  }
-  if (provider.providerRevision > provider.grafanaSyncedRevision || !provider.enabled)
-    return OIDC_PROVIDER_STATUS.PENDING;
+  if (!provider.enabled) return OIDC_PROVIDER_STATUS.DISABLED;
+  if (provider.grafanaTarget === GRAFANA_PROVIDER_KIND.NONE) return OIDC_PROVIDER_STATUS.DEVLAKE_ONLY;
+  if (provider.providerRevision > provider.grafanaSyncedRevision) return OIDC_PROVIDER_STATUS.PENDING;
   return OIDC_PROVIDER_STATUS.ACTIVE;
+};
+
+export const getAuthenticationState = (providers: OIDCProvider[]) => {
+  if (providers.length === 0) return AUTHENTICATION_STATE.NO_MANAGED_OIDC;
+  if (providers.some((provider) => provider.databaseSourceActive && provider.enabled)) {
+    return AUTHENTICATION_STATE.OIDC_ACTIVE;
+  }
+  if (providers.some((provider) => provider.hasCandidate)) return AUTHENTICATION_STATE.ACTIVATION_REQUIRED;
+  return AUTHENTICATION_STATE.NO_ACTIVE_OIDC;
 };
 
 export const canActivateOIDCProvider = (provider?: OIDCProvider) => {
   if (!provider?.providerKey || provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.COMPENSATION_FAILED)
     return false;
-  if (!provider.databaseSourceActive) {
-    return (
-      provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.SYNCHRONIZED ||
-      provider.grafanaSyncStatus === OIDC_PROVIDER_SYNC_STATUS.COMPENSATED
-    );
-  }
-  return provider.providerRevision > provider.grafanaSyncedRevision;
+  return !provider.databaseSourceActive || provider.hasCandidate;
 };
+
+export const canSelectGenericOIDCProvider = (provider: OIDCProvider) =>
+  provider.enabled &&
+  !provider.hasCandidate &&
+  provider.grafanaTarget === GRAFANA_PROVIDER_KIND.NONE &&
+  provider.grafanaSyncStatus !== OIDC_PROVIDER_SYNC_STATUS.COMPENSATION_FAILED;

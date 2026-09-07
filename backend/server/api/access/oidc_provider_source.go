@@ -22,13 +22,13 @@ import (
 	"github.com/apache/incubator-devlake/core/errors"
 )
 
-// LoadDatabaseOIDCProvider returns a provider, whether database configuration is
-// authoritative, and an error. A nil provider with databaseSource=false means no
-// activated database source exists yet. A nil provider with databaseSource=true means
-// the activated source has no enabled provider and callers must fail closed. It also
-// returns databaseSource=false before this migration exists, because auth starts before
+// LoadDatabaseOIDCProviders returns providers, whether database configuration is
+// authoritative, and an error. An empty provider list with databaseSource=false means
+// no database source is active. An empty list with databaseSource=true means the active
+// source has no enabled provider and callers must fail closed. It also returns
+// databaseSource=false before this migration exists, because auth starts before
 // migrations and must preserve the environment bootstrap on that boot.
-func LoadDatabaseOIDCProvider(db dal.Dal) (*OIDCProvider, bool, errors.Error) {
+func LoadDatabaseOIDCProviders(db dal.Dal) ([]OIDCProvider, bool, errors.Error) {
 	if !db.HasTable((OIDCProviderConfiguration{}).TableName()) {
 		return nil, false, nil
 	}
@@ -42,12 +42,12 @@ func LoadDatabaseOIDCProvider(db dal.Dal) (*OIDCProvider, bool, errors.Error) {
 	if configuration.ActivatedAt == nil {
 		return nil, false, nil
 	}
-	provider := &OIDCProvider{}
-	if err := db.First(provider, dal.Where("enabled = ? AND retired_at IS NULL", true)); err != nil {
-		if db.IsErrorNotFound(err) {
-			return nil, true, nil
-		}
+	providers := make([]OIDCProvider, 0)
+	if err := db.All(&providers,
+		dal.Where("enabled = ? AND retired_at IS NULL", true),
+		dal.Orderby("provider_key ASC"),
+	); err != nil {
 		return nil, true, err
 	}
-	return provider, true, nil
+	return providers, true, nil
 }

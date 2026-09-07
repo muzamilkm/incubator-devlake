@@ -29,8 +29,13 @@ import (
 )
 
 type testAccessAuthorizer struct {
-	err        errors.Error
-	identities []access.Identity
+	err            errors.Error
+	identities     []access.Identity
+	linkStateID    string
+	linkProvider   string
+	linkedStateID  string
+	linkedProvider string
+	linkedIdentity access.Identity
 }
 
 func (a *testAccessAuthorizer) Enabled() bool { return true }
@@ -45,6 +50,21 @@ func (a *testAccessAuthorizer) AuthorizeSession(identity access.Identity) (*acce
 		return nil, a.err
 	}
 	return &access.Principal{UserID: 1, Role: access.RoleCustomerAdmin}, nil
+}
+
+func (a *testAccessAuthorizer) BeginIdentityLink(_ uint64, providerKey string) (string, errors.Error) {
+	a.linkProvider = providerKey
+	if a.linkStateID == "" {
+		a.linkStateID = "test-link-state"
+	}
+	return a.linkStateID, a.err
+}
+
+func (a *testAccessAuthorizer) CompleteIdentityLink(stateID, providerKey string, identity access.Identity) errors.Error {
+	a.linkedStateID = stateID
+	a.linkedProvider = providerKey
+	a.linkedIdentity = identity
+	return a.err
 }
 
 func TestOIDCAuthenticationRejectsUnauthorizedAccessSession(t *testing.T) {

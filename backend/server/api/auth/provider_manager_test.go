@@ -18,6 +18,7 @@ limitations under the License.
 package auth
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -69,5 +70,35 @@ func TestGetMethodsUsesDatabaseProviderSnapshot(t *testing.T) {
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+}
+
+func TestGetMethodsListsMultipleProvidersInStableOrder(t *testing.T) {
+	previousMode := gin.Mode()
+	gin.SetMode(gin.TestMode)
+	t.Cleanup(func() { gin.SetMode(previousMode) })
+
+	response := httptest.NewRecorder()
+	requestContext, _ := gin.CreateTestContext(response)
+	service := &Service{
+		runtimeCfg: &oidchelper.Config{
+			OIDCEnabled: true,
+			Providers: map[string]*oidchelper.ProviderConfig{
+				"okta":   {Name: "okta", DisplayName: "Okta"},
+				"google": {Name: "google", DisplayName: "Google"},
+			},
+		},
+	}
+
+	service.GetMethods(requestContext)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	methods := Methods{}
+	if err := json.Unmarshal(response.Body.Bytes(), &methods); err != nil {
+		t.Fatalf("decode methods: %v", err)
+	}
+	if len(methods.Providers) != 2 || methods.Providers[0].Name != "google" || methods.Providers[1].Name != "okta" {
+		t.Fatalf("provider methods = %#v, want stable google/okta order", methods.Providers)
 	}
 }

@@ -51,16 +51,17 @@ export const Access = () => {
   const refresh = useCallback(() => setVersion((current) => current + 1), []);
 
   const { data, ready } = useRefreshData(async () => {
-    const [users, domains, auditEvents, providerResult] = await Promise.all([
+    const [users, domains, auditEvents, providerResult, callbackResult] = await Promise.all([
       API.access.listUsers({ page: userPage, pageSize: userPageSize }),
       API.access.listDomains({ page: domainPage, pageSize: domainPageSize }),
       API.access.listAuditEvents(),
       API.access
-        .getOIDCProvider()
-        .then((provider) => ({ provider, loadFailed: false }))
-        .catch(() => ({ provider: undefined, loadFailed: true })),
+        .listOIDCProviders()
+        .then((providers) => ({ providers, loadFailed: false }))
+        .catch(() => ({ providers: [], loadFailed: true })),
+      API.access.getOIDCCallbacks().catch(() => undefined),
     ]);
-    return { users, domains, auditEvents, providerResult };
+    return { users, domains, auditEvents, providerResult, callbackResult };
   }, [version, userPage, userPageSize, domainPage, domainPageSize]);
   const users = data?.users;
   const domains = data?.domains;
@@ -234,7 +235,8 @@ export const Access = () => {
       />
 
       <Authentication
-        provider={data?.providerResult.provider}
+        callbacks={data?.callbackResult}
+        providers={data?.providerResult.providers ?? []}
         loadFailed={data?.providerResult.loadFailed ?? false}
         onRefresh={refresh}
       />

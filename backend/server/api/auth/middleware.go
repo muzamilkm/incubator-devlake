@@ -126,18 +126,17 @@ func (s *Service) OIDCAuthentication() gin.HandlerFunc {
 // RevokePersistentSessions implements access.SessionRevoker. The caller owns the
 // transaction so disabling a directory user and revoking their session rows commit
 // together.
-func (s *Service) RevokePersistentSessions(tx dal.Transaction, issuer, subject string) ([]string, errors.Error) {
-	cfg, _ := s.providerState()
+func (s *Service) RevokePersistentSessions(tx dal.Transaction, providerKeys []string, subject string) ([]string, errors.Error) {
 	ids := make([]string, 0)
-	for providerName, provider := range cfg.Providers {
-		if provider == nil || provider.IssuerURL != issuer {
+	for _, providerKey := range providerKeys {
+		if providerKey == "" {
 			continue
 		}
-		activeIDs, err := ListActiveSessionIDsForIdentity(tx, providerName, subject)
+		activeIDs, err := ListActiveSessionIDsForIdentity(tx, providerKey, subject)
 		if err != nil {
 			return nil, err
 		}
-		if err := RevokeSessionsForIdentity(tx, providerName, subject); err != nil {
+		if err := RevokeSessionsForIdentity(tx, providerKey, subject); err != nil {
 			return nil, err
 		}
 		ids = append(ids, activeIDs...)
