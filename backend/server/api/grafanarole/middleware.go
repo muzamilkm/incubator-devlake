@@ -22,6 +22,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/apache/incubator-devlake/server/api/access"
 	"github.com/apache/incubator-devlake/server/api/shared"
 )
 
@@ -29,11 +30,18 @@ import (
 // GF_DATAPROXY_SEND_USER_HEADER=true; its value is the signed-in user's login.
 const UserHeader = "X-Grafana-User"
 
-// RequireGrafanaAdmin gates a route for callers arriving with a REST API-key
-// identity -- in practice the Grafana datasource proxy, since that holds the key.
+// RequireGrafanaAdmin gates a route for both caller types that can reach it:
+// the Grafana datasource proxy (a REST API-key identity) and a config-ui
+// session/proxy-header caller.
 //
-// Session and proxy-header callers pass through untouched, so config-ui keeps
-// working exactly as before; gating those is tracked as follow-up work.
+// A session/proxy-header caller must hold the DevLake customer-admin role.
+// RequireAuth upstream only proves the caller is *some* authenticated member,
+// not an admin, so without this check any signed-in member could call these
+// routes directly (bypassing config-ui, which merely hides the controls) and
+// grant themselves visibility into an arbitrary project. When the Access
+// Directory itself is disabled (a legacy, role-less deployment mode), there is
+// no admin/member distinction to enforce, so the caller passes through
+// unchanged to preserve prior behavior for that mode.
 //
 // Every other outcome fails closed: no X-Grafana-User, no config, or an
 // unreachable Grafana all yield 403, because the proxy admits any signed-in
@@ -41,6 +49,15 @@ const UserHeader = "X-Grafana-User"
 func RequireGrafanaAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if _, viaApiKey := shared.GetRestAuthUser(c.Request); !viaApiKey {
+			accessService := access.Default()
+			if !accessService.Enabled() {
+				c.Next()
+				return
+			}
+			if _, err := accessService.RequireAdmin(c); err != nil {
+				deny(c)
+				return
+			}
 			c.Next()
 			return
 		}
@@ -67,12 +84,13 @@ func RequireGrafanaAdmin() gin.HandlerFunc {
 	}
 }
 
-// deny returns one message for every failure mode: distinguishing "you are a
-// Viewer" from "the lookup is misconfigured" would leak configuration to an
-// unprivileged caller.
+// deny returns one message for every failure mode, for both caller types this
+// middleware gates: distinguishing "you are a Viewer"/"you are a member" from
+// "the lookup is misconfigured" would leak configuration to an unprivileged
+// caller.
 func deny(c *gin.Context) {
 	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 		"success": false,
-		"message": "grafana org admin role required",
+		"message": "administrator role required",
 	})
 }
