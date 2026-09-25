@@ -216,7 +216,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT $__timeGroup(s.started_date, 1w) as time, \n  COUNT(1) as committed, \n  SUM(CASE WHEN i.resolution_date IS NOT NULL\n\t\tAND i.resolution_date >= s.started_date \n\t\tAND i.resolution_date <= s.ended_date\n\t\tTHEN 1 ELSE 0 END) AS Delivered\nFROM sprint_issues si \nJOIN sprints s ON s.id = si.sprint_id \nJOIN issues i ON i.id = si.issue_id \nWHERE s.id LIKE 'jira:%'\n  AND $__timeFilter(s.started_date)\nGROUP BY time",
+          "rawSql": "SELECT $__timeGroup(s.started_date, 1w) as time, \n  COUNT(1) as committed, \n  SUM(CASE WHEN i.resolution_date IS NOT NULL\n\t\tAND i.resolution_date >= s.started_date \n\t\tAND i.resolution_date <= s.ended_date\n\t\tTHEN 1 ELSE 0 END) AS Delivered\nFROM sprint_issues si \nJOIN sprints s ON s.id = si.sprint_id \nJOIN issues i ON i.id = si.issue_id \nWHERE s.id LIKE 'jira:%'\n  AND $__timeFilter(s.started_date)\n  AND EXISTS (\n    SELECT 1 FROM board_issues bi WHERE bi.issue_id = si.issue_id AND bi.board_id IN ($board_id)\n  )\nGROUP BY time",
           "refId": "A",
           "sql": {
             "columns": [
