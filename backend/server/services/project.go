@@ -399,6 +399,14 @@ func DeleteProject(name string) errors.Error {
 	if err != nil {
 		return errors.Default.Wrap(err, "error deleting project Issue metric")
 	}
+	// UserProjectMapping keys Grafana visibility by project name, not a
+	// generated ID. Without this, a later project recreated under the same
+	// name silently inherits every stale mapping left by the deleted one,
+	// handing its old viewers access to the new project's data.
+	err = tx.Delete(&models.UserProjectMapping{}, dal.Where("project_name = ?", name))
+	if err != nil {
+		return errors.Default.Wrap(err, "error deleting user project mapping")
+	}
 	return tx.Commit()
 }
 
